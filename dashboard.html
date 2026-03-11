@@ -1,0 +1,1666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCP Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a24;
+    --border: #2a2a3a;
+    --accent: #7c6aff;
+    --accent2: #00e5c0;
+    --accent3: #ff6b6b;
+    --text: #e8e8f0;
+    --text2: #888899;
+    --text3: #555566;
+    --green: #00e5a0;
+    --yellow: #ffd166;
+    --red: #ff6b6b;
+    --mono: 'Space Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── GRID BACKGROUND ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.3;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── LAYOUT ── */
+  .shell { display: flex; min-height: 100vh; position: relative; z-index: 1; }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: 240px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+  }
+
+  .logo {
+    padding: 24px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+
+  .logo-text {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--text);
+  }
+
+  .logo-sub {
+    font-size: 10px;
+    color: var(--text3);
+    font-family: var(--mono);
+  }
+
+  nav { padding: 16px 12px; flex: 1; }
+
+  .nav-section {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text3);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 12px 8px 6px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13.5px;
+    color: var(--text2);
+    transition: all 0.15s;
+    margin-bottom: 2px;
+    border: 1px solid transparent;
+  }
+
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+
+  .nav-item.active {
+    background: rgba(124, 106, 255, 0.12);
+    color: var(--accent);
+    border-color: rgba(124, 106, 255, 0.2);
+  }
+
+  .nav-icon { font-size: 15px; width: 18px; text-align: center; }
+
+  .badge {
+    margin-left: auto;
+    background: var(--accent);
+    color: white;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-family: var(--mono);
+  }
+
+  .badge.green { background: var(--green); color: var(--bg); }
+
+  /* ── MAIN ── */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    height: 56px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    gap: 16px;
+    background: rgba(10,10,15,0.8);
+    backdrop-filter: blur(10px);
+  }
+
+  .topbar-title {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  .topbar-crumb {
+    font-size: 12px;
+    color: var(--text3);
+    font-family: var(--mono);
+  }
+
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .avatar {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* ── CONTENT ── */
+  .content { flex: 1; overflow-y: auto; padding: 28px 28px; }
+
+  /* ── PAGES ── */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+  }
+
+  .card-title {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text2);
+  }
+
+  /* ── STATS ROW ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .stat-card.purple::after { background: linear-gradient(90deg, var(--accent), transparent); }
+  .stat-card.cyan::after { background: linear-gradient(90deg, var(--accent2), transparent); }
+  .stat-card.green::after { background: linear-gradient(90deg, var(--green), transparent); }
+  .stat-card.red::after { background: linear-gradient(90deg, var(--yellow), transparent); }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--text3);
+    font-family: var(--mono);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .stat-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
+
+  /* ── BUTTONS ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+    font-family: var(--sans);
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+  }
+  .btn-primary:hover { background: #6b5ae0; transform: translateY(-1px); }
+
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn-success {
+    background: rgba(0,229,160,0.15);
+    color: var(--green);
+    border: 1px solid rgba(0,229,160,0.3);
+  }
+
+  .btn-danger {
+    background: rgba(255,107,107,0.15);
+    color: var(--red);
+    border: 1px solid rgba(255,107,107,0.3);
+  }
+
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+  /* ── FORM ELEMENTS ── */
+  .form-group { margin-bottom: 18px; }
+
+  .form-label {
+    display: block;
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--text2);
+    margin-bottom: 8px;
+    letter-spacing: 0.04em;
+  }
+
+  .form-input, .form-select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13.5px;
+    font-family: var(--sans);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .form-input:focus, .form-select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(124,106,255,0.1);
+  }
+
+  .form-select option { background: var(--surface2); }
+
+  /* ── GITHUB CONNECT ── */
+  .github-connect {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+  }
+
+  .github-logo { font-size: 28px; }
+
+  .github-info { flex: 1; }
+  .github-info h3 { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+  .github-info p { font-size: 12px; color: var(--text3); }
+
+  .github-connected {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--green);
+    font-family: var(--mono);
+  }
+
+  /* ── DEPLOY STEPS ── */
+  .steps {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 28px;
+  }
+
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--text3);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+  }
+
+  .step.active {
+    color: var(--accent);
+    border-color: rgba(124,106,255,0.4);
+    background: rgba(124,106,255,0.08);
+  }
+
+  .step.done {
+    color: var(--green);
+    border-color: rgba(0,229,160,0.3);
+    background: rgba(0,229,160,0.06);
+  }
+
+  .step-num {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+  }
+
+  .step.active .step-num { background: var(--accent); color: white; }
+  .step.done .step-num { background: var(--green); color: var(--bg); }
+
+  .step-arrow {
+    width: 24px; height: 1px;
+    background: var(--border);
+  }
+
+  /* ── REPO CARD ── */
+  .repo-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    background: var(--bg);
+  }
+
+  .repo-item:hover { border-color: var(--accent); background: rgba(124,106,255,0.05); }
+  .repo-item.selected { border-color: var(--accent); background: rgba(124,106,255,0.1); }
+
+  .repo-name { font-size: 13.5px; font-weight: 500; }
+  .repo-desc { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .repo-lang {
+    margin-left: auto;
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--accent2);
+    background: rgba(0,229,192,0.1);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  /* ── TERMINAL / LOG VIEWER ── */
+  .terminal {
+    background: #050508;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .terminal-bar {
+    background: var(--surface2);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .term-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+
+  .term-dot.red { background: #ff5f57; }
+  .term-dot.yellow { background: #febc2e; }
+  .term-dot.green { background: #28c840; }
+
+  .terminal-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    margin-left: 4px;
+  }
+
+  .terminal-live {
+    margin-left: auto;
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--green);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .terminal-body {
+    padding: 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.8;
+    max-height: 320px;
+    overflow-y: auto;
+    color: #88ffcc;
+  }
+
+  .log-line { display: block; }
+  .log-line.err { color: var(--red); }
+  .log-line.warn { color: var(--yellow); }
+  .log-line.info { color: var(--accent2); }
+  .log-line.success { color: var(--green); }
+
+  .log-time { color: var(--text3); margin-right: 8px; }
+
+  /* ── URL BOX ── */
+  .url-box {
+    background: var(--bg);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 16px 0;
+  }
+
+  .url-label {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+
+  .url-value {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent2);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .copy-btn {
+    padding: 5px 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text2);
+    font-size: 11px;
+    cursor: pointer;
+    font-family: var(--mono);
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* ── TABLE ── */
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left;
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text3);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 12px 14px;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(42,42,58,0.5);
+    vertical-align: middle;
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(124,106,255,0.04); }
+
+  /* ── STATUS CHIPS ── */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-family: var(--mono);
+    font-weight: 700;
+  }
+
+  .chip-green {
+    background: rgba(0,229,160,0.12);
+    color: var(--green);
+    border: 1px solid rgba(0,229,160,0.25);
+  }
+
+  .chip-red {
+    background: rgba(255,107,107,0.12);
+    color: var(--red);
+    border: 1px solid rgba(255,107,107,0.25);
+  }
+
+  .chip-yellow {
+    background: rgba(255,209,102,0.12);
+    color: var(--yellow);
+    border: 1px solid rgba(255,209,102,0.25);
+  }
+
+  .chip-purple {
+    background: rgba(124,106,255,0.12);
+    color: var(--accent);
+    border: 1px solid rgba(124,106,255,0.25);
+  }
+
+  /* ── GRID LAYOUTS ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+
+  /* ── SECTION HEADER ── */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+
+  .section-title {
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+  }
+
+  .section-sub { font-size: 13px; color: var(--text3); margin-top: 3px; }
+
+  /* ── EMPTY STATE ── */
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text3);
+  }
+
+  .empty-icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-title { font-size: 15px; color: var(--text2); margin-bottom: 6px; }
+  .empty-sub { font-size: 13px; }
+
+  /* ── MCP SERVER CARDS ── */
+  .mcp-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+
+  .mcp-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    transition: all 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .mcp-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+  }
+
+  .mcp-card:hover { border-color: rgba(124,106,255,0.4); transform: translateY(-2px); }
+
+  .mcp-card-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+
+  .mcp-icon {
+    width: 38px; height: 38px;
+    border-radius: 8px;
+    background: rgba(124,106,255,0.15);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .mcp-name { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+  .mcp-repo { font-size: 11px; color: var(--text3); font-family: var(--mono); }
+
+  .mcp-card-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+    width: 560px;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 22px;
+  }
+
+  .modal-title { font-family: var(--mono); font-size: 14px; font-weight: 700; }
+
+  .close-btn {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+  }
+
+  .close-btn:hover { color: var(--text); border-color: var(--text3); }
+
+  /* ── NOTIFICATION ── */
+  .notif {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    background: var(--surface);
+    border: 1px solid var(--green);
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 13px;
+    color: var(--green);
+    font-family: var(--mono);
+    z-index: 200;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.3s;
+    max-width: 340px;
+  }
+
+  .notif.show { transform: translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-icon">⚡</div>
+      <div>
+        <div class="logo-text">MCP CLOUD</div>
+        <div class="logo-sub">v1.0 · local dev</div>
+      </div>
+    </div>
+    <nav>
+      <div class="nav-section">Overview</div>
+      <div class="nav-item active" onclick="showPage('dashboard')">
+        <span class="nav-icon">◈</span> Dashboard
+      </div>
+
+      <div class="nav-section">Deploy</div>
+      <div class="nav-item" onclick="showPage('deploy')">
+        <span class="nav-icon">⬡</span> GitHub Import
+      </div>
+      <div class="nav-item" onclick="showPage('servers')">
+        <span class="nav-icon">▣</span> MCP Servers
+        <span class="badge green" id="server-count">0</span>
+      </div>
+
+      <div class="nav-section">Observe</div>
+      <div class="nav-item" onclick="showPage('sessions')">
+        <span class="nav-icon">◎</span> Sessions
+      </div>
+      <div class="nav-item" onclick="showPage('audit')">
+        <span class="nav-icon">≡</span> Audit Logs
+      </div>
+
+      <div class="nav-section">Settings</div>
+      <div class="nav-item" onclick="showPage('settings')">
+        <span class="nav-icon">◌</span> OAuth Config
+      </div>
+    </nav>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <span class="topbar-title" id="topbar-title">DASHBOARD</span>
+      <span class="topbar-crumb" id="topbar-crumb">/ overview</span>
+      <div class="topbar-right">
+        <div class="status-dot"></div>
+        <span style="font-size:12px;color:var(--text3);font-family:var(--mono)">API: localhost:8000</span>
+        <div class="avatar" title="You">U</div>
+      </div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="content">
+
+      <!-- ══ DASHBOARD PAGE ══ -->
+      <div class="page active" id="page-dashboard">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Platform Overview</div>
+            <div class="section-sub">Your MCP hosting control center</div>
+          </div>
+          <button class="btn btn-primary" onclick="showPage('deploy')">⬡ Deploy New MCP</button>
+        </div>
+
+        <div class="stats-row">
+          <div class="stat-card purple">
+            <div class="stat-label">MCP Servers</div>
+            <div class="stat-value" id="stat-servers">0</div>
+            <div class="stat-sub">deployed</div>
+          </div>
+          <div class="stat-card cyan">
+            <div class="stat-label">Active Sessions</div>
+            <div class="stat-value" id="stat-sessions">0</div>
+            <div class="stat-sub">right now</div>
+          </div>
+          <div class="stat-card green">
+            <div class="stat-label">Tool Calls</div>
+            <div class="stat-value" id="stat-calls">0</div>
+            <div class="stat-sub">total logged</div>
+          </div>
+          <div class="stat-card red">
+            <div class="stat-label">Identities</div>
+            <div class="stat-value" id="stat-users">0</div>
+            <div class="stat-sub">tracked users</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Recent Servers</div>
+              <button class="btn btn-secondary btn-sm" onclick="showPage('servers')">View all</button>
+            </div>
+            <div id="dash-servers-list">
+              <div class="empty">
+                <div class="empty-icon">⬡</div>
+                <div class="empty-title">No servers yet</div>
+                <div class="empty-sub">Import from GitHub to deploy your first MCP</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Recent Audit Events</div>
+              <button class="btn btn-secondary btn-sm" onclick="showPage('audit')">View all</button>
+            </div>
+            <div id="dash-audit-list">
+              <div class="empty">
+                <div class="empty-icon">≡</div>
+                <div class="empty-title">No events yet</div>
+                <div class="empty-sub">Tool calls will appear here in real-time</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ DEPLOY PAGE ══ -->
+      <div class="page" id="page-deploy">
+        <div class="section-header">
+          <div>
+            <div class="section-title">GitHub Import</div>
+            <div class="section-sub">Connect a repo → pick entry file → get a live URL</div>
+          </div>
+        </div>
+
+        <!-- STEPS -->
+        <div class="steps" style="margin-bottom:28px">
+          <div class="step done" id="step-1"><div class="step-num">✓</div> Connect GitHub</div>
+          <div class="step-arrow"></div>
+          <div class="step active" id="step-2"><div class="step-num">2</div> Select Repo</div>
+          <div class="step-arrow"></div>
+          <div class="step" id="step-3"><div class="step-num">3</div> Pick Entry File</div>
+          <div class="step-arrow"></div>
+          <div class="step" id="step-4"><div class="step-num">4</div> Deploy & Run</div>
+        </div>
+
+        <!-- STEP 1: GITHUB CONNECT -->
+        <div class="card" style="margin-bottom:20px" id="github-connect-card">
+          <div class="card-header">
+            <div class="card-title">① GitHub Connection</div>
+            <div id="github-status-badge"></div>
+          </div>
+          <div id="github-connect-form">
+            <p style="font-size:13px;color:var(--text3);margin-bottom:16px">
+              Connect your GitHub account using a Personal Access Token.
+              <a href="https://github.com/settings/tokens/new?scopes=repo" target="_blank"
+                 style="color:var(--accent);text-decoration:none"> Create token →</a>
+            </p>
+            <div style="display:flex;gap:10px">
+              <input type="password" class="form-input" id="github-token-input"
+                     placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" style="flex:1">
+              <button class="btn btn-primary" onclick="connectGitHub()">Connect GitHub</button>
+            </div>
+          </div>
+          <div id="github-connected-display" style="display:none">
+            <div class="github-connected">
+              <span>●</span>
+              <span id="github-user-display">Connected</span>
+              <button class="btn btn-secondary btn-sm" onclick="disconnectGitHub()" style="margin-left:8px">Disconnect</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 2: SELECT REPO -->
+        <div class="card" style="margin-bottom:20px" id="repo-select-card">
+          <div class="card-header">
+            <div class="card-title">② Select Repository</div>
+            <button class="btn btn-secondary btn-sm" onclick="loadRepos()" id="refresh-repos-btn">↻ Refresh</button>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <select class="form-select" id="repo-dropdown" onchange="onRepoSelected()" style="margin-bottom:12px">
+              <option value="">— Connect GitHub first to see your repos —</option>
+            </select>
+            <div id="repo-details" style="display:none">
+              <div class="repo-item selected" id="repo-detail-card">
+                <div>
+                  <div class="repo-name" id="repo-detail-name">—</div>
+                  <div class="repo-desc" id="repo-detail-desc">—</div>
+                </div>
+                <div class="repo-lang" id="repo-detail-lang">Python</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 3: ENTRY FILE -->
+        <div class="card" style="margin-bottom:20px" id="entry-file-card">
+          <div class="card-header">
+            <div class="card-title">③ Select Entry File (main.py)</div>
+          </div>
+          <p style="font-size:13px;color:var(--text3);margin-bottom:14px">
+            Select the Python file that starts your MCP server. Usually <code style="color:var(--accent2);background:var(--surface2);padding:1px 5px;border-radius:3px">main.py</code> or <code style="color:var(--accent2);background:var(--surface2);padding:1px 5px;border-radius:3px">server.py</code>
+          </p>
+          <div class="form-group" style="margin-bottom:0">
+            <select class="form-select" id="entry-file-dropdown">
+              <option value="">— Select a repo first —</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- STEP 4: DEPLOY -->
+        <div class="card" id="deploy-form-card">
+          <div class="card-header">
+            <div class="card-title">④ Configure & Deploy</div>
+          </div>
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label">Server Name</label>
+              <input type="text" class="form-input" id="server-name-input" placeholder="e.g. invoice-processor">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Description</label>
+              <input type="text" class="form-input" id="server-desc-input" placeholder="What does this MCP do?">
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="deployMCP()" id="deploy-btn" style="width:100%;justify-content:center">
+            🚀 Deploy MCP Server
+          </button>
+        </div>
+
+        <!-- DEPLOY RESULT -->
+        <div id="deploy-result" style="display:none;margin-top:20px">
+          <div class="card" style="border-color:var(--green)">
+            <div class="card-header">
+              <div class="card-title" style="color:var(--green)">✅ MCP Server Live!</div>
+            </div>
+
+            <div class="url-box">
+              <div class="url-label">MCP URL</div>
+              <div class="url-value" id="result-mcp-url">—</div>
+              <button class="copy-btn" onclick="copyUrl('mcp')">Copy</button>
+            </div>
+
+            <div class="url-box" style="border-color:var(--accent);margin-top:0">
+              <div class="url-label">OAuth URL</div>
+              <div class="url-value" id="result-oauth-url">—</div>
+              <button class="copy-btn" onclick="copyUrl('oauth')">Copy</button>
+            </div>
+
+            <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-top:14px">
+              <div style="font-size:11px;font-family:var(--mono);color:var(--text3);margin-bottom:8px">ADD TO CLAUDE CODE (~/.claude/config.json)</div>
+              <pre id="claude-config" style="font-family:var(--mono);font-size:11.5px;color:var(--accent2);line-height:1.7;overflow-x:auto"></pre>
+            </div>
+
+            <div style="margin-top:16px">
+              <div style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-bottom:8px">LIVE LOGS</div>
+              <div class="terminal">
+                <div class="terminal-bar">
+                  <div class="term-dot red"></div>
+                  <div class="term-dot yellow"></div>
+                  <div class="term-dot green"></div>
+                  <span class="terminal-title" id="terminal-server-name">mcp-server</span>
+                  <div class="terminal-live">
+                    <div style="width:6px;height:6px;background:var(--green);border-radius:50%;animation:pulse 1.5s infinite"></div>
+                    LIVE
+                  </div>
+                </div>
+                <div class="terminal-body" id="deploy-log-output">
+                  <span class="log-line info">[system] Waiting for deployment...</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ SERVERS PAGE ══ -->
+      <div class="page" id="page-servers">
+        <div class="section-header">
+          <div>
+            <div class="section-title">MCP Servers</div>
+            <div class="section-sub">All deployed servers with status and endpoints</div>
+          </div>
+          <button class="btn btn-primary" onclick="showPage('deploy')">⬡ Deploy New</button>
+        </div>
+
+        <div id="servers-grid" class="mcp-cards">
+          <div class="empty" style="grid-column:1/-1">
+            <div class="empty-icon">⬡</div>
+            <div class="empty-title">No servers deployed</div>
+            <div class="empty-sub">Deploy your first MCP from GitHub</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ SESSIONS PAGE ══ -->
+      <div class="page" id="page-sessions">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Active Sessions</div>
+            <div class="section-sub">Real-time user sessions per MCP server</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="loadSessions()">↻ Refresh</button>
+        </div>
+
+        <div class="card">
+          <table>
+            <thead>
+              <tr>
+                <th>Session ID</th>
+                <th>User</th>
+                <th>MCP Server</th>
+                <th>Started</th>
+                <th>Calls</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="sessions-table">
+              <tr>
+                <td colspan="6" style="text-align:center;color:var(--text3);padding:40px">
+                  No active sessions
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ══ AUDIT LOGS PAGE ══ -->
+      <div class="page" id="page-audit">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Audit Logs</div>
+            <div class="section-sub">Every tool call — who, what, when</div>
+          </div>
+          <div style="display:flex;gap:10px">
+            <select class="form-select" style="width:180px" id="audit-filter-user">
+              <option value="">All Users</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" onclick="loadAuditLogs()">↻ Refresh</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>User</th>
+                <th>Tenant</th>
+                <th>Tool Called</th>
+                <th>MCP Server</th>
+                <th>Duration</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="audit-table">
+              <tr>
+                <td colspan="7" style="text-align:center;color:var(--text3);padding:40px">
+                  No audit events yet — tool calls will appear here
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ══ SETTINGS PAGE ══ -->
+      <div class="page" id="page-settings">
+        <div class="section-header">
+          <div>
+            <div class="section-title">OAuth Configuration</div>
+            <div class="section-sub">Keycloak identity server settings</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Keycloak Settings</div></div>
+
+            <div class="form-group">
+              <label class="form-label">Keycloak URL</label>
+              <input type="text" class="form-input" value="http://localhost:8080" readonly>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Realm</label>
+              <input type="text" class="form-input" value="mcp-platform" readonly>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Client ID</label>
+              <input type="text" class="form-input" value="mcp-backend" readonly>
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label">Status</label>
+              <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px">
+                <div class="status-dot" style="width:8px;height:8px"></div>
+                <span style="font-size:13px;color:var(--green)">Running on localhost:8080</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><div class="card-title">Quick Links</div></div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <a href="http://localhost:8080" target="_blank" class="btn btn-secondary" style="text-decoration:none">
+                🔐 Keycloak Admin Console
+              </a>
+              <a href="http://localhost:8000/docs" target="_blank" class="btn btn-secondary" style="text-decoration:none">
+                📡 Backend API Docs (Swagger)
+              </a>
+              <a href="http://localhost:9001" target="_blank" class="btn btn-secondary" style="text-decoration:none">
+                🗄️ MinIO File Storage
+              </a>
+              <div class="btn btn-secondary" onclick="testAPI()">
+                ⚡ Test API Connection
+              </div>
+            </div>
+
+            <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+              <div class="card-title" style="margin-bottom:12px">AWS Migration (Later)</div>
+              <div style="font-size:12px;color:var(--text3);line-height:1.8">
+                <div>Keycloak → AWS Cognito</div>
+                <div>PostgreSQL → AWS RDS</div>
+                <div>Redis → AWS ElastiCache</div>
+                <div>MinIO → AWS S3</div>
+                <div style="margin-top:8px;color:var(--text2)">Zero code changes — just swap env vars</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /shell -->
+
+<!-- NOTIFICATION -->
+<div class="notif" id="notif"></div>
+
+<script>
+// ─── STATE ──────────────────────────────────────────
+const API = 'http://localhost:8000';
+let githubConnected = false;
+let selectedRepo = null;
+let deployedServers = [];
+let activeServerId = null;
+let logPollingInterval = null;
+
+// ─── NAVIGATION ─────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+
+  const titles = {
+    dashboard: ['DASHBOARD', '/ overview'],
+    deploy: ['GITHUB IMPORT', '/ deploy / github'],
+    servers: ['MCP SERVERS', '/ servers'],
+    sessions: ['SESSIONS', '/ observe / sessions'],
+    audit: ['AUDIT LOGS', '/ observe / audit'],
+    settings: ['OAUTH CONFIG', '/ settings'],
+  };
+
+  document.getElementById('topbar-title').textContent = titles[name][0];
+  document.getElementById('topbar-crumb').textContent = titles[name][1];
+
+  document.querySelectorAll('.nav-item').forEach(n => {
+    if (n.textContent.toLowerCase().includes(name === 'deploy' ? 'github' : name)) {
+      n.classList.add('active');
+    }
+  });
+
+  if (name === 'audit') loadAuditLogs();
+  if (name === 'sessions') loadSessions();
+}
+
+// ─── NOTIFY ─────────────────────────────────────────
+function notify(msg, isError = false) {
+  const el = document.getElementById('notif');
+  el.textContent = msg;
+  el.style.borderColor = isError ? 'var(--red)' : 'var(--green)';
+  el.style.color = isError ? 'var(--red)' : 'var(--green)';
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+// ─── GITHUB CONNECT ──────────────────────────────────
+async function connectGitHub() {
+  const token = document.getElementById('github-token-input').value.trim();
+  if (!token) { notify('Please enter your GitHub token', true); return; }
+
+  try {
+    // Test GitHub token directly in browser
+    const resp = await fetch('https://api.github.com/user', {
+      headers: { 'Authorization': `token ${token}` }
+    });
+
+    if (!resp.ok) { notify('Invalid GitHub token. Please check it.', true); return; }
+    const user = await resp.json();
+
+    // Store token locally (in real app: send to backend)
+    window._githubToken = token;
+    githubConnected = true;
+
+    document.getElementById('github-connect-form').style.display = 'none';
+    document.getElementById('github-connected-display').style.display = 'block';
+    document.getElementById('github-user-display').textContent =
+      `✓ Connected as @${user.login} (${user.public_repos} repos)`;
+
+    // Mark step 1 done
+    document.getElementById('step-1').className = 'step done';
+    document.getElementById('step-1').innerHTML = '<div class="step-num">✓</div> Connect GitHub';
+
+    notify(`GitHub connected: @${user.login}`);
+    await loadRepos();
+
+  } catch(e) {
+    notify('Connection failed: ' + e.message, true);
+  }
+}
+
+function disconnectGitHub() {
+  window._githubToken = null;
+  githubConnected = false;
+  document.getElementById('github-connect-form').style.display = 'block';
+  document.getElementById('github-connected-display').style.display = 'none';
+  document.getElementById('github-token-input').value = '';
+  document.getElementById('repo-dropdown').innerHTML = '<option value="">— Connect GitHub first —</option>';
+}
+
+// ─── LOAD REPOS ──────────────────────────────────────
+async function loadRepos() {
+  if (!window._githubToken) return;
+
+  document.getElementById('repo-dropdown').innerHTML = '<option value="">Loading repos...</option>';
+
+  try {
+    const resp = await fetch('https://api.github.com/user/repos?sort=updated&per_page=100&type=all', {
+      headers: { 'Authorization': `token ${window._githubToken}` }
+    });
+    const repos = await resp.json();
+
+    const pythonRepos = repos.filter(r => r.language === 'Python' || !r.language);
+    const select = document.getElementById('repo-dropdown');
+    select.innerHTML = '<option value="">— Select a repository —</option>';
+
+    pythonRepos.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.full_name;
+      opt.textContent = `${r.full_name} ${r.private ? '🔒' : ''}`;
+      opt.dataset.desc = r.description || '';
+      opt.dataset.lang = r.language || 'Unknown';
+      select.appendChild(opt);
+    });
+
+    notify(`Found ${pythonRepos.length} Python repos`);
+    document.getElementById('step-2').className = 'step active';
+
+  } catch(e) {
+    notify('Failed to load repos: ' + e.message, true);
+  }
+}
+
+// ─── REPO SELECTED ───────────────────────────────────
+async function onRepoSelected() {
+  const select = document.getElementById('repo-dropdown');
+  const fullName = select.value;
+  if (!fullName) return;
+
+  selectedRepo = fullName;
+  const opt = select.options[select.selectedIndex];
+
+  document.getElementById('repo-details').style.display = 'block';
+  document.getElementById('repo-detail-name').textContent = fullName;
+  document.getElementById('repo-detail-desc').textContent = opt.dataset.desc || 'No description';
+  document.getElementById('repo-detail-lang').textContent = opt.dataset.lang;
+
+  // Auto-fill server name
+  document.getElementById('server-name-input').value = fullName.split('/')[1];
+
+  // Load Python files
+  await loadRepoFiles(fullName);
+
+  document.getElementById('step-2').className = 'step done';
+  document.getElementById('step-2').innerHTML = '<div class="step-num">✓</div> Select Repo';
+  document.getElementById('step-3').className = 'step active';
+}
+
+async function loadRepoFiles(fullName) {
+  const [owner, repo] = fullName.split('/');
+  const fileSelect = document.getElementById('entry-file-dropdown');
+  fileSelect.innerHTML = '<option value="">Loading files...</option>';
+
+  try {
+    const resp = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`,
+      { headers: { 'Authorization': `token ${window._githubToken}` } }
+    );
+    const data = await resp.json();
+
+    const pyFiles = (data.tree || [])
+      .filter(f => f.type === 'blob' && f.path.endsWith('.py'))
+      .map(f => f.path);
+
+    fileSelect.innerHTML = '<option value="">— Select entry file —</option>';
+
+    // Sort: main/server/app first
+    const priority = pyFiles.filter(f => /\b(main|server|app)\b/.test(f));
+    const rest = pyFiles.filter(f => !/\b(main|server|app)\b/.test(f));
+    [...priority, ...rest].forEach(f => {
+      const opt = document.createElement('option');
+      opt.value = f;
+      opt.textContent = f + (priority.includes(f) ? ' ✦ suggested' : '');
+      fileSelect.appendChild(opt);
+    });
+
+    // Auto-select first suggestion
+    if (priority.length > 0) {
+      fileSelect.value = priority[0];
+      document.getElementById('step-3').className = 'step done';
+      document.getElementById('step-3').innerHTML = '<div class="step-num">✓</div> Pick Entry File';
+      document.getElementById('step-4').className = 'step active';
+    }
+
+  } catch(e) {
+    fileSelect.innerHTML = '<option value="">Failed to load files</option>';
+  }
+}
+
+// ─── DEPLOY ──────────────────────────────────────────
+async function deployMCP() {
+  const repo = document.getElementById('repo-dropdown').value;
+  const entryFile = document.getElementById('entry-file-dropdown').value;
+  const serverName = document.getElementById('server-name-input').value.trim();
+  const desc = document.getElementById('server-desc-input').value.trim();
+
+  if (!repo) { notify('Please select a repo', true); return; }
+  if (!entryFile) { notify('Please select an entry file', true); return; }
+  if (!serverName) { notify('Please enter a server name', true); return; }
+
+  const btn = document.getElementById('deploy-btn');
+  btn.textContent = '⏳ Deploying...';
+  btn.disabled = true;
+
+  // Show result panel
+  document.getElementById('deploy-result').style.display = 'block';
+  document.getElementById('terminal-server-name').textContent = serverName;
+  const logEl = document.getElementById('deploy-log-output');
+  logEl.innerHTML = '';
+
+  function addLog(msg, type = '') {
+    const span = document.createElement('span');
+    span.className = 'log-line ' + type;
+    span.textContent = msg;
+    logEl.appendChild(span);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  // Simulate deployment steps (real app calls backend)
+  const tenantSlug = 'local01';
+  const mcpUrl = `http://localhost:8000/mcp/${tenantSlug}/${serverName.toLowerCase().replace(/\s+/g,'-')}`;
+  const oauthUrl = `http://localhost:8080/realms/mcp-platform/protocol/openid-connect/auth`;
+
+  const steps = [
+    { msg: `[00:00:01] 🔄 Connecting to GitHub...`, type: 'info', delay: 400 },
+    { msg: `[00:00:02] ✅ Authenticated as @${window._githubToken ? 'you' : 'user'}`, type: 'success', delay: 800 },
+    { msg: `[00:00:03] 📦 Cloning repo: ${repo}...`, type: 'info', delay: 1400 },
+    { msg: `[00:00:05] ✅ Repo cloned successfully`, type: 'success', delay: 2200 },
+    { msg: `[00:00:06] 📦 Installing requirements.txt...`, type: 'info', delay: 2800 },
+    { msg: `[00:00:09] ✅ Dependencies installed`, type: 'success', delay: 3800 },
+    { msg: `[00:00:10] ✅ Entry file found: ${entryFile}`, type: 'success', delay: 4200 },
+    { msg: `[00:00:11] 🚀 Starting MCP server: ${serverName}...`, type: 'info', delay: 4800 },
+    { msg: `[00:00:12] ✅ MCP server started (PID: ${Math.floor(Math.random()*9000+1000)})`, type: 'success', delay: 5600 },
+    { msg: `[00:00:13] 🔐 OAuth wrapper applied — Keycloak protecting endpoint`, type: 'success', delay: 6200 },
+    { msg: `[00:00:14] 🌐 Endpoint URL: ${mcpUrl}`, type: 'info', delay: 6800 },
+    { msg: `[00:00:15] ✅ Ready! Add URL to Claude Code.`, type: 'success', delay: 7400 },
+  ];
+
+  steps.forEach(s => {
+    setTimeout(() => addLog(s.msg, s.type), s.delay);
+  });
+
+  setTimeout(() => {
+    // Show URLs
+    document.getElementById('result-mcp-url').textContent = mcpUrl;
+    document.getElementById('result-oauth-url').textContent = oauthUrl;
+    document.getElementById('claude-config').textContent = JSON.stringify({
+      "mcpServers": {
+        [serverName]: {
+          "url": mcpUrl,
+          "auth": {
+            "type": "oauth2",
+            "authorizationUrl": oauthUrl,
+            "clientId": "mcp-frontend"
+          }
+        }
+      }
+    }, null, 2);
+
+    // Save server
+    const newServer = {
+      id: Date.now().toString(),
+      name: serverName,
+      repo: repo,
+      entryFile: entryFile,
+      url: mcpUrl,
+      status: 'running',
+      calls: 0,
+      createdAt: new Date().toISOString(),
+    };
+    deployedServers.push(newServer);
+    activeServerId = newServer.id;
+    updateServerCount();
+    renderServerCards();
+    updateDashboard();
+
+    btn.textContent = '🚀 Deploy MCP Server';
+    btn.disabled = false;
+
+    document.getElementById('step-4').className = 'step done';
+    document.getElementById('step-4').innerHTML = '<div class="step-num">✓</div> Deploy & Run';
+
+    notify(`✅ ${serverName} is live!`);
+  }, 7800);
+}
+
+// ─── COPY URLS ───────────────────────────────────────
+function copyUrl(type) {
+  const url = document.getElementById(
+    type === 'mcp' ? 'result-mcp-url' : 'result-oauth-url'
+  ).textContent;
+  navigator.clipboard.writeText(url);
+  notify('Copied to clipboard!');
+}
+
+// ─── RENDER SERVERS ──────────────────────────────────
+function renderServerCards() {
+  const grid = document.getElementById('servers-grid');
+  if (deployedServers.length === 0) {
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1">
+      <div class="empty-icon">⬡</div>
+      <div class="empty-title">No servers deployed</div>
+      <div class="empty-sub">Deploy your first MCP from GitHub</div>
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = deployedServers.map(s => `
+    <div class="mcp-card">
+      <div class="mcp-card-header">
+        <div class="mcp-icon">⬡</div>
+        <div>
+          <div class="mcp-name">${s.name}</div>
+          <div class="mcp-repo">⬡ ${s.repo}</div>
+          <div class="mcp-repo" style="color:var(--text3)">📄 ${s.entryFile}</div>
+        </div>
+        <div style="margin-left:auto">
+          <span class="chip ${s.status === 'running' ? 'chip-green' : 'chip-red'}">
+            ${s.status === 'running' ? '● LIVE' : '○ STOPPED'}
+          </span>
+        </div>
+      </div>
+
+      <div style="font-size:11px;font-family:var(--mono);color:var(--text3);margin-bottom:6px">ENDPOINT</div>
+      <div style="font-size:11.5px;font-family:var(--mono);color:var(--accent2);
+                  background:var(--bg);padding:8px 10px;border-radius:6px;
+                  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+                  border:1px solid var(--border)">
+        ${s.url}
+      </div>
+
+      <div class="mcp-card-actions">
+        <button class="btn btn-secondary btn-sm" onclick="copyServerUrl('${s.id}')">Copy URL</button>
+        <button class="btn btn-secondary btn-sm" onclick="viewLogs('${s.id}')">View Logs</button>
+        <button class="btn btn-danger btn-sm" onclick="stopServer('${s.id}')" style="margin-left:auto">Stop</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function copyServerUrl(id) {
+  const s = deployedServers.find(x => x.id === id);
+  if (s) { navigator.clipboard.writeText(s.url); notify('URL copied!'); }
+}
+
+function stopServer(id) {
+  const s = deployedServers.find(x => x.id === id);
+  if (s) { s.status = 'stopped'; renderServerCards(); notify(`${s.name} stopped`); }
+}
+
+function viewLogs(id) {
+  showPage('deploy');
+  document.getElementById('deploy-result').style.display = 'block';
+  notify('Showing logs for server');
+}
+
+// ─── STATS ───────────────────────────────────────────
+function updateServerCount() {
+  const count = deployedServers.filter(s => s.status === 'running').length;
+  document.getElementById('server-count').textContent = count;
+  document.getElementById('stat-servers').textContent = deployedServers.length;
+}
+
+function updateDashboard() {
+  document.getElementById('stat-sessions').textContent = Math.floor(Math.random()*5);
+  document.getElementById('stat-calls').textContent = Math.floor(Math.random()*120);
+  document.getElementById('stat-users').textContent = Math.floor(Math.random()*8)+1;
+
+  // Recent servers in dashboard
+  const list = document.getElementById('dash-servers-list');
+  if (deployedServers.length > 0) {
+    list.innerHTML = deployedServers.slice(-3).reverse().map(s => `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div class="mcp-icon" style="width:30px;height:30px;font-size:14px">⬡</div>
+        <div>
+          <div style="font-size:13px;font-weight:500">${s.name}</div>
+          <div style="font-size:11px;color:var(--text3);font-family:var(--mono)">${s.repo}</div>
+        </div>
+        <span class="chip chip-green" style="margin-left:auto">● LIVE</span>
+      </div>
+    `).join('');
+  }
+}
+
+// ─── SESSIONS (MOCK) ─────────────────────────────────
+function loadSessions() {
+  const tbody = document.getElementById('sessions-table');
+  if (deployedServers.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:40px">No active sessions</td></tr>`;
+    return;
+  }
+
+  const mockSessions = deployedServers.map((s, i) => ({
+    id: `sess-${s.id.slice(-6)}`,
+    email: `user${i+1}@example.com`,
+    server: s.name,
+    started: new Date(Date.now() - Math.random()*3600000).toLocaleTimeString(),
+    calls: Math.floor(Math.random()*50),
+    status: 'active',
+  }));
+
+  tbody.innerHTML = mockSessions.map(sess => `
+    <tr>
+      <td><span style="font-family:var(--mono);font-size:12px;color:var(--text3)">${sess.id}</span></td>
+      <td>${sess.email}</td>
+      <td><span class="chip chip-purple">${sess.server}</span></td>
+      <td style="color:var(--text3);font-family:var(--mono);font-size:12px">${sess.started}</td>
+      <td><span style="font-family:var(--mono)">${sess.calls}</span></td>
+      <td><span class="chip chip-green">● active</span></td>
+    </tr>
+  `).join('');
+}
+
+// ─── AUDIT LOGS (MOCK) ───────────────────────────────
+function loadAuditLogs() {
+  const tbody = document.getElementById('audit-table');
+  if (deployedServers.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:40px">No events yet</td></tr>`;
+    return;
+  }
+
+  const tools = ['extract_invoice_data','validate_invoice','get_summary','analyze_contract','process_payment'];
+  const users = ['alice@acme.com','bob@acme.com','carol@startup.io'];
+  const logs = Array.from({length:12}, (_,i) => ({
+    time: new Date(Date.now() - i*240000).toLocaleTimeString(),
+    user: users[i % users.length],
+    tenant: 'acme-corp',
+    tool: tools[i % tools.length],
+    server: deployedServers[i % deployedServers.length]?.name || '—',
+    duration: `${Math.floor(Math.random()*800)+100}ms`,
+    status: Math.random() > 0.1 ? 'success' : 'error',
+  }));
+
+  tbody.innerHTML = logs.map(l => `
+    <tr>
+      <td style="font-family:var(--mono);font-size:12px;color:var(--text3)">${l.time}</td>
+      <td style="font-size:12px">${l.user}</td>
+      <td><span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${l.tenant}</span></td>
+      <td><code style="font-family:var(--mono);font-size:12px;color:var(--accent2);
+                       background:rgba(0,229,192,0.08);padding:2px 7px;border-radius:4px">
+        ${l.tool}</code></td>
+      <td><span class="chip chip-purple">${l.server}</span></td>
+      <td style="font-family:var(--mono);font-size:12px;color:var(--text3)">${l.duration}</td>
+      <td><span class="chip ${l.status === 'success' ? 'chip-green' : 'chip-red'}">
+        ${l.status}</span></td>
+    </tr>
+  `).join('');
+}
+
+// ─── TEST API ────────────────────────────────────────
+async function testAPI() {
+  try {
+    const resp = await fetch(`${API}/health`);
+    if (resp.ok) notify('✅ Backend API is running!');
+    else notify('⚠️ Backend responded but with error', true);
+  } catch(e) {
+    notify('❌ Backend not reachable. Is docker-compose running?', true);
+  }
+}
+
+// ─── INIT ────────────────────────────────────────────
+showPage('dashboard');
+</script>
+</body>
+</html>

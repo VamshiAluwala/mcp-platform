@@ -1,0 +1,8 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/auth/callback/page": "/auth/callback",
+  "/page": "/",
+  "/login/page": "/login",
+  "/auth/github/callback/page": "/auth/github/callback",
+  "/auth/google/callback/page": "/auth/google/callback"
+}

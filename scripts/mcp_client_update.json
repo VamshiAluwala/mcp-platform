@@ -1,0 +1,19 @@
+{
+  "clientId": "mcp-clients",
+  "enabled": true,
+  "publicClient": true,
+  "protocol": "openid-connect",
+  "standardFlowEnabled": true,
+  "directAccessGrantsEnabled": false,
+  "serviceAccountsEnabled": false,
+  "redirectUris": [
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "webOrigins": [
+    "*"
+  ],
+  "attributes": {
+    "pkce.code.challenge.method": "S256"
+  }
+}
