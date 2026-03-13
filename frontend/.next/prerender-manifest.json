@@ -26,7 +26,7 @@
         "x-next-revalidate-tag-token"
       ]
     },
-    "/": {
+    "/auth/google/callback": {
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -39,8 +39,32 @@
         }
       ],
       "initialRevalidateSeconds": false,
-      "srcRoute": "/",
-      "dataRoute": "/index.rsc",
+      "srcRoute": "/auth/google/callback",
+      "dataRoute": "/auth/google/callback.rsc",
+      "allowHeader": [
+        "host",
+        "x-matched-path",
+        "x-prerender-revalidate",
+        "x-prerender-revalidate-if-generated",
+        "x-next-revalidated-tags",
+        "x-next-revalidate-tag-token"
+      ]
+    },
+    "/auth/github/callback": {
+      "experimentalBypassFor": [
+        {
+          "type": "header",
+          "key": "next-action"
+        },
+        {
+          "type": "header",
+          "key": "content-type",
+          "value": "multipart/form-data;.*"
+        }
+      ],
+      "initialRevalidateSeconds": false,
+      "srcRoute": "/auth/github/callback",
+      "dataRoute": "/auth/github/callback.rsc",
       "allowHeader": [
         "host",
         "x-matched-path",
@@ -98,7 +122,7 @@
         "x-next-revalidate-tag-token"
       ]
     },
-    "/auth/github/callback": {
+    "/": {
       "experimentalBypassFor": [
         {
           "type": "header",
@@ -111,32 +135,8 @@
         }
       ],
       "initialRevalidateSeconds": false,
-      "srcRoute": "/auth/github/callback",
-      "dataRoute": "/auth/github/callback.rsc",
-      "allowHeader": [
-        "host",
-        "x-matched-path",
-        "x-prerender-revalidate",
-        "x-prerender-revalidate-if-generated",
-        "x-next-revalidated-tags",
-        "x-next-revalidate-tag-token"
-      ]
-    },
-    "/auth/google/callback": {
-      "experimentalBypassFor": [
-        {
-          "type": "header",
-          "key": "next-action"
-        },
-        {
-          "type": "header",
-          "key": "content-type",
-          "value": "multipart/form-data;.*"
-        }
-      ],
-      "initialRevalidateSeconds": false,
-      "srcRoute": "/auth/google/callback",
-      "dataRoute": "/auth/google/callback.rsc",
+      "srcRoute": "/",
+      "dataRoute": "/index.rsc",
       "allowHeader": [
         "host",
         "x-matched-path",
@@ -150,8 +150,8 @@
   "dynamicRoutes": {},
   "notFoundRoutes": [],
   "preview": {
-    "previewModeId": "8b002b6ecadd688424d06c3a0afbcaeb",
-    "previewModeSigningKey": "6f4ea8dc3c9f5b433136ca9708e5cbd93a219cdf59d9beec63afe9dd3dee4d00",
-    "previewModeEncryptionKey": "ce1abcec2a9be0974b79565f87794d8bd8fc9f452210cf49e6e641497be2071e"
+    "previewModeId": "210bedf0d3e440d1024e9f0ffdb045cf",
+    "previewModeSigningKey": "a566f45bd8167882185c7be6878aadc2f5fb658b9b9d62b18d2dcff8be60333d",
+    "previewModeEncryptionKey": "a72f0cb717cf60696f1d4dfa40bf533a273856901ed74913db9d69d3b7a39517"
   }
 }

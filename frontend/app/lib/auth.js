@@ -17,6 +17,7 @@ export function decodeOAuthState(rawState) {
   try {
     const decoded = JSON.parse(window.atob(rawState));
     return {
+      ...decoded,
       provider: decoded?.provider || "keycloak",
       next: decoded?.next || "/",
     };

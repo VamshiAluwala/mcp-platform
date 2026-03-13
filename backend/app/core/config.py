@@ -10,6 +10,10 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres123@localhost:5432/appdb"
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 40
+    DB_POOL_TIMEOUT: int = 30
+    DB_POOL_RECYCLE: int = 1800
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379"
@@ -38,7 +42,13 @@ class Settings(BaseSettings):
     # Frontend
     FRONTEND_URL: str = "http://localhost:3000"
     FRONTEND_OAUTH_CALLBACK_URL: str = "http://localhost:3000/auth/callback"
+    GATEWAY_PUBLIC_URL: str = "http://localhost:8000"
     ADMIN_EMAILS: str = "sales@agentorix.in"
+    ALLOW_DIRECT_GOOGLE_TOKENS: bool = True
+
+    # Runtime
+    DOCKER_NETWORK: str = "mcp-platform-network"
+    MCP_DEFAULT_RUNTIME_PORT: int = 8000
 
     # Encryption (used for GitHub token-at-rest)
     GITHUB_TOKEN_ENCRYPTION_SECRET: str = "change-this-local-dev-secret"

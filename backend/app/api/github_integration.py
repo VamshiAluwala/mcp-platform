@@ -23,9 +23,11 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.access import normalize_email_list, validate_group_ids
 from app.auth.middleware import get_current_user
 from app.auth.service import build_remote_mcp_client_config, decrypt_github_token, encrypt_github_token
 from app.core.config import settings
+from app.mcp.host import mcp_host
 from app.mcp.session import session_manager
 from app.models.database import GitHubConnection, MCPServer, get_db
 
@@ -39,9 +41,6 @@ GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
 GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
 GITHUB_API_URL = "https://api.github.com"
 
-_server_logs: dict[str, list[str]] = {}
-_running_processes: dict[str, subprocess.Popen] = {}
-
 
 class DeployFromGitHubRequest(BaseModel):
     connection_id: str
@@ -50,15 +49,9 @@ class DeployFromGitHubRequest(BaseModel):
     server_name: str
     description: str = ""
     allowed_emails: list[str] = []
-
-
-def _normalize_allowed_emails(emails: list[str] | None) -> list[str]:
-    normalized: list[str] = []
-    for email in emails or []:
-        cleaned = (email or "").strip().lower()
-        if cleaned and "@" in cleaned and cleaned not in normalized:
-            normalized.append(cleaned)
-    return normalized
+    allowed_group_ids: list[str] = []
+    runtime_port: int = settings.MCP_DEFAULT_RUNTIME_PORT
+    runtime_env: dict[str, str] = {}
 
 
 class GitHubOAuthCallbackRequest(BaseModel):
@@ -67,8 +60,7 @@ class GitHubOAuthCallbackRequest(BaseModel):
 
 
 def _append_log(server_id: str, msg: str):
-    timestamp = datetime.utcnow().strftime("%H:%M:%S")
-    _server_logs.setdefault(server_id, []).append(f"[{timestamp}] {msg}")
+    mcp_host.append_log(server_id, msg)
 
 
 def _github_oauth_state_key(state: str) -> str:
@@ -399,10 +391,8 @@ async def deploy_from_github(
 
     server_id = str(uuid.uuid4())
     tenant_id = user["tenant_id"]
-    tenant_slug = tenant_id[:8]
     server_dir = MCP_SERVERS_DIR / server_id
     server_dir.mkdir(exist_ok=True)
-    _server_logs[server_id] = []
 
     try:
         _append_log(server_id, f"Cloning repo: {request.repo_full_name}")
@@ -418,37 +408,30 @@ async def deploy_from_github(
             raise HTTPException(status_code=400, detail="Failed to clone repository")
         _append_log(server_id, "Repo cloned successfully")
 
-        req_file = server_dir / "requirements.txt"
-        if req_file.exists():
-            _append_log(server_id, "Installing requirements.txt")
-            pip_result = subprocess.run(
-                ["pip", "install", "-r", str(req_file), "--quiet"],
-                capture_output=True,
-                text=True,
-                timeout=180,
-            )
-            if pip_result.returncode == 0:
-                _append_log(server_id, "Dependencies installed")
-            else:
-                _append_log(server_id, f"Dependency install issue: {pip_result.stderr[:180]}")
-
         entry_path = server_dir / request.entry_file
         if not entry_path.exists():
             _append_log(server_id, f"Entry file not found: {request.entry_file}")
             raise HTTPException(status_code=400, detail="Selected entry file not found in repository")
         _append_log(server_id, f"Entry file found: {request.entry_file}")
 
-        process = subprocess.Popen(
-            ["python", str(entry_path)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            cwd=str(server_dir),
-        )
-        _running_processes[server_id] = process
-        _append_log(server_id, f"MCP server started with PID {process.pid}")
+        try:
+            allowed_group_ids = await validate_group_ids(
+                db,
+                tenant_id=tenant_id,
+                group_ids=request.allowed_group_ids,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-        endpoint_url = f"http://localhost:8000/mcp/{tenant_slug}/{request.server_name.lower().replace(' ', '-')}"
+        runtime = await mcp_host.deploy_python_workspace(
+            server_id=server_id,
+            workspace_dir=server_dir,
+            entry_file=request.entry_file,
+            runtime_port=request.runtime_port,
+            runtime_env=request.runtime_env,
+        )
+
+        endpoint_url = mcp_host.build_gateway_url(server_id)
         _append_log(server_id, f"Endpoint URL: {endpoint_url}")
         client_config = build_remote_mcp_client_config(request.server_name, endpoint_url)
 
@@ -463,13 +446,17 @@ async def deploy_from_github(
                 storage_path=str(entry_path),
                 status="running",
                 config={
+                    "source_type": "github",
                     "github_repo": request.repo_full_name,
                     "github_connection_id": connection.id,
                     "github_username": connection.github_username,
                     "entry_file": request.entry_file,
-                    "pid": process.pid,
+                    "runtime_port": request.runtime_port,
                     "owner_email": (user.get("email") or "").strip().lower() or None,
-                    "allowed_user_emails": _normalize_allowed_emails(request.allowed_emails),
+                    "allowed_user_emails": normalize_email_list(request.allowed_emails),
+                    "allowed_group_ids": allowed_group_ids,
+                    "runtime_env_keys": sorted(request.runtime_env.keys()),
+                    "runtime": runtime,
                     "client_config": client_config,
                 },
             )
@@ -480,7 +467,8 @@ async def deploy_from_github(
             "status": "running",
             "endpoint_url": endpoint_url,
             "client_config": client_config,
-            "allowed_emails": _normalize_allowed_emails(request.allowed_emails),
+            "allowed_emails": normalize_email_list(request.allowed_emails),
+            "allowed_group_ids": allowed_group_ids,
             "message": f"'{request.server_name}' is live",
         }
     except HTTPException:
@@ -503,24 +491,9 @@ async def get_logs(
     ):
         raise HTTPException(status_code=404, detail="Server not found")
 
-    logs = _server_logs.get(server_id, [])
-    process = _running_processes.get(server_id)
-
-    if process and process.poll() is None and process.stdout is not None:
-        try:
-            import select as sel
-
-            if sel.select([process.stdout], [], [], 0)[0]:
-                new_line = process.stdout.readline()
-                if new_line:
-                    _append_log(server_id, new_line.strip())
-                    logs = _server_logs.get(server_id, [])
-        except Exception:
-            pass
-
-    status = server.status
-    if process and process.poll() is not None:
-        status = "stopped"
+    status = await mcp_host.get_status(server.config or {})
+    server.status = status
+    logs = await mcp_host.get_logs(server_id, server.config or {})
 
     return {
         "server_id": server_id,
@@ -543,11 +516,8 @@ async def stop_server(
     ):
         raise HTTPException(status_code=404, detail="Server not found")
 
-    process = _running_processes.get(server_id)
-    if process and process.poll() is None:
-        process.terminate()
-        _append_log(server_id, "Server stopped by user")
-
+    await mcp_host.stop(server.config or {})
+    _append_log(server_id, "Server stopped by user")
     server.status = "stopped"
     server.updated_at = datetime.utcnow()
     return {"message": "Server stopped", "server_id": server_id}

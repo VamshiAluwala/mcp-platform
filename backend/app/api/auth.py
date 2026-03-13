@@ -44,7 +44,7 @@ async def get_login_url(
             state=effective_state,
             provider=provider,
         ),
-        "oauth": oauth_metadata(),
+        "oauth": oauth_metadata(google_hint=(provider == "google")),
     }
 
 

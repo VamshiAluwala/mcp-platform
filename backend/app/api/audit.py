@@ -20,7 +20,7 @@ from app.models.database import AuditLog
 
 async def log_tool_call(
     db: AsyncSession,
-    session_id: str,
+    session_id: str | None,
     mcp_server_id: str,
     tenant_id: str,
     user_id: str,

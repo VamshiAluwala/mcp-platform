@@ -34,6 +34,22 @@ def _authorization_endpoint_public_with_google_hint() -> str:
     return f"{_authorization_endpoint_public()}?kc_idp_hint={settings.KEYCLOAK_GOOGLE_IDP_HINT}"
 
 
+def _gateway_base_public() -> str:
+    return settings.GATEWAY_PUBLIC_URL.rstrip("/")
+
+
+def gateway_authorization_endpoint() -> str:
+    return f"{_gateway_base_public()}/authorize"
+
+
+def gateway_token_endpoint() -> str:
+    return f"{_gateway_base_public()}/token"
+
+
+def gateway_registration_endpoint() -> str:
+    return f"{_gateway_base_public()}/register"
+
+
 def build_login_url(
     *,
     redirect_uri: str | None = None,
@@ -142,6 +158,23 @@ async def exchange_google_code(
         return resp.json()
 
 
+async def exchange_google_refresh_token(refresh_token: str) -> dict:
+    payload: dict[str, str] = {
+        "grant_type": "refresh_token",
+        "client_id": settings.GOOGLE_CLIENT_ID,
+        "client_secret": settings.GOOGLE_CLIENT_SECRET,
+        "refresh_token": refresh_token,
+    }
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            GOOGLE_TOKEN_ENDPOINT,
+            data=payload,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+
 async def fetch_google_userinfo(access_token: str) -> dict:
     """Fetch user profile from Google's userinfo endpoint."""
     async with httpx.AsyncClient(timeout=30) as client:
@@ -199,6 +232,93 @@ def oauth_metadata(client_id: str | None = None, google_hint: bool = False) -> d
     }
 
 
+def gateway_oauth_metadata() -> dict:
+    return {
+        "issuer": _gateway_base_public(),
+        "authorization_endpoint": gateway_authorization_endpoint(),
+        "token_endpoint": gateway_token_endpoint(),
+        "registration_endpoint": gateway_registration_endpoint(),
+        "response_types_supported": ["code"],
+        "grant_types_supported": ["authorization_code", "refresh_token"],
+        "token_endpoint_auth_methods_supported": ["none"],
+        "code_challenge_methods_supported": ["S256", "plain"],
+        "scopes_supported": ["openid", "profile", "email"],
+        "client_id_metadata_document_supported": True,
+    }
+
+
+def protected_resource_metadata(resource_url: str) -> dict:
+    return {
+        "resource": resource_url,
+        "authorization_servers": [_gateway_base_public()],
+        "scopes_supported": ["openid", "profile", "email"],
+        "bearer_methods_supported": ["header"],
+    }
+
+
+def build_mcp_authorize_redirect(
+    *,
+    redirect_uri: str,
+    state: str | None = None,
+    scope: str | None = None,
+    code_challenge: str | None = None,
+    code_challenge_method: str | None = None,
+) -> str:
+    query: dict[str, str] = {
+        "client_id": settings.KEYCLOAK_MCP_CLIENT_ID,
+        "response_type": "code",
+        "scope": scope or "openid profile email",
+        "redirect_uri": redirect_uri,
+        "kc_idp_hint": settings.KEYCLOAK_GOOGLE_IDP_HINT,
+    }
+    if state:
+        query["state"] = state
+    if code_challenge:
+        query["code_challenge"] = code_challenge
+    if code_challenge_method:
+        query["code_challenge_method"] = code_challenge_method
+    return f"{_authorization_endpoint_public()}?{urlencode(query)}"
+
+
+async def exchange_mcp_tokens(
+    *,
+    grant_type: str,
+    code: str | None = None,
+    redirect_uri: str | None = None,
+    refresh_token: str | None = None,
+    code_verifier: str | None = None,
+) -> dict:
+    payload: dict[str, str] = {
+        "grant_type": grant_type,
+        "client_id": settings.KEYCLOAK_MCP_CLIENT_ID,
+    }
+
+    if grant_type == "authorization_code":
+        if not code:
+            raise ValueError("code is required")
+        if not redirect_uri:
+            raise ValueError("redirect_uri is required")
+        payload["code"] = code
+        payload["redirect_uri"] = redirect_uri
+        if code_verifier:
+            payload["code_verifier"] = code_verifier
+    elif grant_type == "refresh_token":
+        if not refresh_token:
+            raise ValueError("refresh_token is required")
+        payload["refresh_token"] = refresh_token
+    else:
+        raise ValueError(f"Unsupported grant_type: {grant_type}")
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            _token_endpoint_internal(),
+            data=payload,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+
 def base64_urlsafe(raw: bytes) -> bytes:
     import base64
     return base64.urlsafe_b64encode(raw)
@@ -218,29 +338,24 @@ def decrypt_github_token(token_encrypted: str) -> str:
 
 
 def build_claude_oauth_block(endpoint_url: str) -> dict:
-    meta = oauth_metadata(
-        client_id=settings.KEYCLOAK_MCP_CLIENT_ID,
-        google_hint=True,
-    )
+    meta = gateway_oauth_metadata()
     return {
         "url": endpoint_url,
         "auth": {
             "type": "oauth2",
             "authorizationUrl": meta["authorization_endpoint"],
             "tokenUrl": meta["token_endpoint"],
-            "clientId": meta["client_id"],
+            "clientId": settings.KEYCLOAK_MCP_CLIENT_ID,
             "scopes": ["openid", "profile", "email"],
         },
     }
 
 
 def build_remote_mcp_client_config(server_name: str, endpoint_url: str) -> dict:
-    oauth = build_claude_oauth_block(endpoint_url)
     return {
         "mcpServers": {
             server_name: {
                 "serverUrl": endpoint_url,
-                "oauth": oauth["auth"],
             }
         }
     }

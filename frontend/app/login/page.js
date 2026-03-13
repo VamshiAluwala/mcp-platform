@@ -54,7 +54,6 @@ function LoginContent() {
     try {
       setError("");
       setLoadingProvider(provider);
-      // Google has its own dedicated callback route registered in Google Cloud Console
       const redirectUri =
         provider === "google_direct"
           ? `${window.location.origin}/auth/google/callback`

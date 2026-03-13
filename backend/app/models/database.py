@@ -72,6 +72,40 @@ class GitHubConnection(Base):
     )
 
 
+class AccessGroup(Base):
+    __tablename__ = "access_groups"
+
+    id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+    )
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), nullable=False)
+    created_by_user_id: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source: Mapped[str] = mapped_column(String, default="manual")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+
+class AccessGroupMember(Base):
+    __tablename__ = "access_group_members"
+
+    id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+    )
+    group_id: Mapped[str] = mapped_column(String, ForeignKey("access_groups.id"), nullable=False)
+    email: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class MCPServer(Base):
     __tablename__ = "mcp_servers"
 
@@ -230,9 +264,17 @@ async def create_tables():
                 "ON github_connections (user_id, provider_user_id)"
             )
         )
+        await conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_access_group_members_group_email "
+                "ON access_group_members (group_id, email)"
+            )
+        )
 
 
 __all__ = [
+    "AccessGroup",
+    "AccessGroupMember",
     "AuditLog",
     "Base",
     "GitHubConnection",

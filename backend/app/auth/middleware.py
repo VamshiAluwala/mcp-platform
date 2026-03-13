@@ -104,8 +104,9 @@ def get_request_access_token(request: Request) -> str | None:
 async def verify_access_token(token: str) -> dict:
     """
     Verify JWT token.
-    Tries Keycloak first; falls back to Google token verification
-    so Google-authenticated users can also access protected endpoints.
+    Keycloak is the default identity broker for all platform and MCP access.
+    Direct Google token acceptance is disabled by default and only allowed
+    when explicitly enabled for backward compatibility.
     """
     # ── Try Keycloak first ────────────────────────────────────────
     try:
@@ -122,9 +123,10 @@ async def verify_access_token(token: str) -> dict:
         pass  # Fall through to Google verification
 
     # ── Try Google token verification ─────────────────────────────
-    google_claims = await _verify_google_token(token)
-    if google_claims and google_claims.get("sub"):
-        return google_claims
+    if settings.ALLOW_DIRECT_GOOGLE_TOKENS:
+        google_claims = await _verify_google_token(token)
+        if google_claims and google_claims.get("sub"):
+            return google_claims
 
     raise HTTPException(
         status_code=401,

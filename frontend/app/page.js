@@ -9,11 +9,11 @@ const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const TITLES = {
   dashboard: ["DASHBOARD", "/ overview"],
-  deploy: ["GITHUB IMPORT", "/ deploy / github"],
+  deploy: ["DEPLOYMENT", "/ deploy / github + external"],
   servers: ["MCP SERVERS", "/ servers"],
   sessions: ["SESSIONS", "/ observe / sessions"],
   audit: ["AUDIT LOGS", "/ observe / audit"],
-  settings: ["OAUTH CONFIG", "/ settings"],
+  settings: ["SETTINGS", "/ oauth + access groups"],
 };
 
 function cn(...parts) {
@@ -52,6 +52,26 @@ export default function HomePage() {
   const [serverName, setServerName] = useState("");
   const [serverDesc, setServerDesc] = useState("");
   const [allowedEmailsInput, setAllowedEmailsInput] = useState("");
+  const [selectedDeployGroupIds, setSelectedDeployGroupIds] = useState([]);
+  const [runtimePort, setRuntimePort] = useState("8000");
+  const [runtimeEnvInput, setRuntimeEnvInput] = useState("");
+
+  const [externalImportName, setExternalImportName] = useState("");
+  const [externalImportDescription, setExternalImportDescription] = useState("");
+  const [externalAllowedEmailsInput, setExternalAllowedEmailsInput] = useState("");
+  const [externalSelectedGroupIds, setExternalSelectedGroupIds] = useState([]);
+  const [externalImportJson, setExternalImportJson] = useState(
+    JSON.stringify(
+      {
+        upstream_url: "http://host.docker.internal:9000/mcp",
+        headers: {},
+        timeout_seconds: 30,
+      },
+      null,
+      2,
+    ),
+  );
+  const [externalImporting, setExternalImporting] = useState(false);
 
   const [deploying, setDeploying] = useState(false);
   const [deployLogs, setDeployLogs] = useState([
@@ -63,6 +83,10 @@ export default function HomePage() {
   const [sessions, setSessions] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [adminUsers, setAdminUsers] = useState([]);
+  const [accessGroups, setAccessGroups] = useState([]);
+  const [groupEditor, setGroupEditor] = useState({ id: "", name: "", description: "", members: "" });
+  const [expandedAccessServerId, setExpandedAccessServerId] = useState("");
+  const [serverAccessDrafts, setServerAccessDrafts] = useState({});
   const [auditFilterUser, setAuditFilterUser] = useState("");
   const [stats, setStats] = useState({ sessions: 0, calls: 0, users: 0 });
 
@@ -77,6 +101,11 @@ export default function HomePage() {
     const set = new Set(auditLogs.map((row) => row.user).filter(Boolean));
     return Array.from(set);
   }, [auditLogs]);
+
+  const accessGroupNameById = useMemo(
+    () => Object.fromEntries(accessGroups.map((group) => [group.id, group.name])),
+    [accessGroups],
+  );
 
   const filteredAuditLogs = useMemo(() => {
     if (!auditFilterUser) return auditLogs;
@@ -173,6 +202,30 @@ export default function HomePage() {
     return "info";
   }
 
+  function parseRuntimeEnvInput(raw) {
+    const env = {};
+    const lines = String(raw || "").split(/\r?\n/);
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+
+      const separatorIndex = trimmed.indexOf("=");
+      if (separatorIndex <= 0) {
+        throw new Error(`Invalid env line: ${trimmed}`);
+      }
+
+      const key = trimmed.slice(0, separatorIndex).trim();
+      const value = trimmed.slice(separatorIndex + 1);
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+        throw new Error(`Invalid env name: ${key}`);
+      }
+      env[key] = value;
+    }
+
+    return env;
+  }
+
   async function loadCurrentUser() {
     try {
       const payload = await apiRequest("/api/auth/me", { silent: true });
@@ -229,17 +282,32 @@ export default function HomePage() {
     }
   }
 
+  async function loadAccessGroups(silent = true) {
+    try {
+      const payload = await apiRequest("/api/access-groups/", { silent });
+      setAccessGroups(payload.groups || []);
+      return payload.groups || [];
+    } catch (error) {
+      setAccessGroups([]);
+      if (!silent) notify(`Failed to load access groups: ${error.message}`, true);
+      return [];
+    }
+  }
+
   async function loadServers(silent = true) {
     const payload = await apiRequest("/api/mcp/", { silent });
     const mapped = (payload || []).map((server) => ({
       id: server.id,
       name: server.name,
-      repo: server.config?.github_repo || "manual",
+      repo: server.config?.github_repo || server.config?.import_config?.upstream_url || "manual",
       entryFile: server.config?.entry_file || "server.py",
       url: server.endpoint_url,
       status: server.status,
       description: server.description || "",
       config: server.config || {},
+      sourceType: server.config?.source_type || "manual_code",
+      allowedEmails: server.config?.allowed_user_emails || [],
+      allowedGroupIds: server.config?.allowed_group_ids || [],
       createdAt: server.created_at || null,
     }));
     setDeployedServers(mapped);
@@ -446,7 +514,7 @@ export default function HomePage() {
 
   async function fetchServerLogs(serverId) {
     try {
-      const payload = await apiRequest(`/api/github/logs/${serverId}`, { silent: true });
+      const payload = await apiRequest(`/api/mcp/${serverId}/logs`, { silent: true });
       const rows = (payload.logs || []).map((line) => ({
         msg: line,
         type: classifyLog(line),
@@ -496,6 +564,8 @@ export default function HomePage() {
         .split(",")
         .map((email) => email.trim().toLowerCase())
         .filter(Boolean);
+      const parsedRuntimePort = Number(runtimePort || "8000");
+      const runtimeEnv = parseRuntimeEnvInput(runtimeEnvInput);
 
       const payload = await apiRequest("/api/github/deploy", {
         method: "POST",
@@ -506,6 +576,9 @@ export default function HomePage() {
           server_name: serverName.trim(),
           description: serverDesc.trim(),
           allowed_emails: allowedEmails,
+          allowed_group_ids: selectedDeployGroupIds,
+          runtime_port: Number.isFinite(parsedRuntimePort) ? parsedRuntimePort : 8000,
+          runtime_env: runtimeEnv,
         },
       });
 
@@ -516,6 +589,7 @@ export default function HomePage() {
         mcpUrl: payload.endpoint_url,
         clientConfig: payload.client_config || null,
         allowedEmails: payload.allowed_emails || allowedEmails,
+        allowedGroupIds: payload.allowed_group_ids || selectedDeployGroupIds,
       });
 
       await loadServers();
@@ -528,6 +602,60 @@ export default function HomePage() {
       notify(`Deployment failed: ${error.message}`, true);
     } finally {
       setDeploying(false);
+    }
+  }
+
+  async function importExternalMCP() {
+    let parsedConfig;
+    try {
+      parsedConfig = JSON.parse(externalImportJson);
+    } catch {
+      notify("External import JSON is invalid", true);
+      return;
+    }
+
+    if (!externalImportName.trim()) {
+      notify("Enter a name for the external MCP", true);
+      return;
+    }
+
+    setExternalImporting(true);
+    try {
+      const allowedEmails = externalAllowedEmailsInput
+        .split(",")
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean);
+
+      const payload = await apiRequest("/api/mcp/import", {
+        method: "POST",
+        body: {
+          name: externalImportName.trim(),
+          description: externalImportDescription.trim(),
+          json_config: parsedConfig,
+          allowed_emails: allowedEmails,
+          allowed_group_ids: externalSelectedGroupIds,
+        },
+      });
+
+      setDeployResult({
+        ready: true,
+        serverId: payload.server_id,
+        serverName: externalImportName.trim(),
+        mcpUrl: payload.endpoint_url,
+        clientConfig: payload.client_config || null,
+        allowedEmails: payload.allowed_emails || allowedEmails,
+        allowedGroupIds: payload.allowed_group_ids || externalSelectedGroupIds,
+      });
+
+      await loadServers();
+      await loadSessions();
+      await loadAuditLogs();
+      startLogPolling(payload.server_id);
+      notify(`✅ ${externalImportName.trim()} is imported`);
+    } catch (error) {
+      notify(`External import failed: ${error.message}`, true);
+    } finally {
+      setExternalImporting(false);
     }
   }
 
@@ -550,7 +678,7 @@ export default function HomePage() {
 
   async function stopServer(id) {
     try {
-      await apiRequest(`/api/github/stop/${id}`, { method: "POST" });
+      await apiRequest(`/api/mcp/${id}`, { method: "DELETE" });
       await loadServers();
       await loadSessions();
       notify("Server stopped");
@@ -571,10 +699,107 @@ export default function HomePage() {
       mcpUrl: server.url,
       clientConfig: server.config?.client_config || null,
       allowedEmails: server.config?.allowed_user_emails || [],
+      allowedGroupIds: server.config?.allowed_group_ids || [],
     });
 
     startLogPolling(server.id);
     notify("Showing logs for server");
+  }
+
+  function openAccessEditor(server) {
+    setExpandedAccessServerId((current) => (current === server.id ? "" : server.id));
+    setServerAccessDrafts((current) => ({
+      ...current,
+      [server.id]: {
+        emailsInput: (server.allowedEmails || []).join(", "),
+        groupIds: server.allowedGroupIds || [],
+        saving: false,
+      },
+    }));
+  }
+
+  async function saveServerAccess(serverId) {
+    const draft = serverAccessDrafts[serverId];
+    if (!draft) return;
+
+    setServerAccessDrafts((current) => ({
+      ...current,
+      [serverId]: { ...current[serverId], saving: true },
+    }));
+
+    try {
+      const payload = await apiRequest(`/api/mcp/${serverId}/access`, {
+        method: "POST",
+        body: {
+          emails: draft.emailsInput
+            .split(",")
+            .map((email) => email.trim().toLowerCase())
+            .filter(Boolean),
+          group_ids: draft.groupIds || [],
+        },
+      });
+
+      await loadServers();
+      if (deployResult?.serverId === serverId) {
+        setDeployResult((current) => current ? ({
+          ...current,
+          allowedEmails: payload.allowed_emails || [],
+          allowedGroupIds: payload.allowed_group_ids || [],
+          clientConfig: payload.client_config || current.clientConfig,
+        }) : current);
+      }
+      notify("Server access updated");
+    } catch (error) {
+      notify(`Failed to update access: ${error.message}`, true);
+    } finally {
+      setServerAccessDrafts((current) => ({
+        ...current,
+        [serverId]: { ...current[serverId], saving: false },
+      }));
+    }
+  }
+
+  async function saveAccessGroup() {
+    if (!groupEditor.name.trim()) {
+      notify("Access group name is required", true);
+      return;
+    }
+
+    const body = {
+      name: groupEditor.name.trim(),
+      description: groupEditor.description.trim(),
+      members: groupEditor.members
+        .split(",")
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean),
+    };
+
+    try {
+      if (groupEditor.id) {
+        await apiRequest(`/api/access-groups/${groupEditor.id}`, { method: "PUT", body });
+        notify("Access group updated");
+      } else {
+        await apiRequest("/api/access-groups/", { method: "POST", body });
+        notify("Access group created");
+      }
+      setGroupEditor({ id: "", name: "", description: "", members: "" });
+      await loadAccessGroups(false);
+    } catch (error) {
+      notify(`Failed to save access group: ${error.message}`, true);
+    }
+  }
+
+  async function deleteAccessGroup(groupId) {
+    try {
+      await apiRequest(`/api/access-groups/${groupId}`, { method: "DELETE" });
+      if (groupEditor.id === groupId) {
+        setGroupEditor({ id: "", name: "", description: "", members: "" });
+      }
+      await loadAccessGroups(false);
+      notify("Access group deleted");
+    } catch (error) {
+      notify(`Failed to delete access group: ${error.message}`, true);
+    }
   }
 
   async function testAPI() {
@@ -647,6 +872,7 @@ export default function HomePage() {
         loadServers(true),
         loadAuditLogs(),
         loadGitHubConnections({ silent: true }),
+        loadAccessGroups(true),
         (resolvedIsAdmin ? loadAdminUsers(true, true) : Promise.resolve([])),
       ]);
 
@@ -1042,8 +1268,8 @@ export default function HomePage() {
             <div className={cn("page", currentPage === "deploy" && "active")} id="page-deploy">
               <div className="section-header">
                 <div>
-                  <div className="section-title">GitHub Import</div>
-                  <div className="section-sub">Connect a repo → pick entry file → get a live URL</div>
+                  <div className="section-title">Deployment Control Room</div>
+                  <div className="section-sub">GitHub deploys and external MCP imports share the same auth, access, and audit gateway</div>
                 </div>
               </div>
 
@@ -1232,7 +1458,7 @@ export default function HomePage() {
 
               <div className="card" id="deploy-form-card">
                 <div className="card-header">
-                  <div className="card-title">④ Configure &amp; Deploy</div>
+                  <div className="card-title">④ Configure &amp; Deploy from GitHub</div>
                 </div>
                 <div className="grid-2">
                   <div className="form-group">
@@ -1258,6 +1484,45 @@ export default function HomePage() {
                     />
                   </div>
                 </div>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">Runtime Port</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      min="1"
+                      max="65535"
+                      placeholder="8000"
+                      value={runtimePort}
+                      onChange={(event) => setRuntimePort(event.target.value)}
+                    />
+                    <div style={{ marginTop: 8, fontSize: 12, color: "var(--text3)" }}>
+                      Set this to the port your MCP container listens on internally.
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Access Groups</label>
+                    <select
+                      multiple
+                      className="form-select"
+                      value={selectedDeployGroupIds}
+                      onChange={(event) => {
+                        setSelectedDeployGroupIds(Array.from(event.target.selectedOptions).map((option) => option.value));
+                      }}
+                      style={{ minHeight: 120 }}
+                    >
+                      {accessGroups.length === 0 ? (
+                        <option value="">No access groups yet</option>
+                      ) : (
+                        accessGroups.map((group) => (
+                          <option key={group.id} value={group.id}>
+                            {group.name} ({group.member_count})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                </div>
                 <div className="form-group">
                   <label className="form-label">Allowed Google User Emails</label>
                   <input
@@ -1271,6 +1536,19 @@ export default function HomePage() {
                     Only these users, the deploy owner, and admins can access this MCP.
                   </div>
                 </div>
+                <div className="form-group">
+                  <label className="form-label">Optional Runtime Environment Variables</label>
+                  <textarea
+                    className="form-input"
+                    placeholder={"API_KEY=your-secret\nBASE_URL=https://api.example.com"}
+                    value={runtimeEnvInput}
+                    onChange={(event) => setRuntimeEnvInput(event.target.value)}
+                    style={{ minHeight: 120, resize: "vertical", fontFamily: "var(--mono)", fontSize: 12 }}
+                  />
+                  <div style={{ marginTop: 8, fontSize: 12, color: "var(--text3)" }}>
+                    Leave this empty unless your repo requires startup config. Use one <code>KEY=value</code> per line.
+                  </div>
+                </div>
                 <button
                   className="btn btn-primary"
                   onClick={deployMCP}
@@ -1279,6 +1557,88 @@ export default function HomePage() {
                   disabled={deploying}
                 >
                   {deploying ? "⏳ Deploying..." : "🚀 Deploy MCP Server"}
+                </button>
+              </div>
+
+              <div className="card" style={{ marginTop: 20 }}>
+                <div className="card-header">
+                  <div className="card-title">⑤ External / Public MCP Import</div>
+                </div>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">Display Name</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. docs-search-gateway"
+                      value={externalImportName}
+                      onChange={(event) => setExternalImportName(event.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Description</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Wrapped external MCP target"
+                      value={externalImportDescription}
+                      onChange={(event) => setExternalImportDescription(event.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">Allowed User Emails</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="user1@gmail.com, user2@company.com"
+                      value={externalAllowedEmailsInput}
+                      onChange={(event) => setExternalAllowedEmailsInput(event.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Access Groups</label>
+                    <select
+                      multiple
+                      className="form-select"
+                      value={externalSelectedGroupIds}
+                      onChange={(event) => {
+                        setExternalSelectedGroupIds(Array.from(event.target.selectedOptions).map((option) => option.value));
+                      }}
+                      style={{ minHeight: 120 }}
+                    >
+                      {accessGroups.length === 0 ? (
+                        <option value="">No access groups yet</option>
+                      ) : (
+                        accessGroups.map((group) => (
+                          <option key={group.id} value={group.id}>
+                            {group.name} ({group.member_count})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">External MCP JSON Config</label>
+                  <textarea
+                    className="form-input"
+                    value={externalImportJson}
+                    onChange={(event) => setExternalImportJson(event.target.value)}
+                    style={{ minHeight: 210, resize: "vertical", fontFamily: "var(--mono)", fontSize: 12 }}
+                  />
+                  <div style={{ marginTop: 8, fontSize: 12, color: "var(--text3)" }}>
+                    Accepts `upstream_url` or a full `mcpServers.*.serverUrl` JSON block. The gateway will wrap this target with Keycloak auth, group/email access, and audit logs.
+                  </div>
+                </div>
+                <button
+                  className="btn btn-secondary"
+                  onClick={importExternalMCP}
+                  style={{ width: "100%", justifyContent: "center" }}
+                  disabled={externalImporting}
+                >
+                  {externalImporting ? "⏳ Importing..." : "↗ Import External MCP"}
                 </button>
               </div>
 
@@ -1303,6 +1663,11 @@ export default function HomePage() {
                     {deployResult.allowedEmails?.length > 0 && (
                       <div style={{ marginTop: 12, fontSize: 12, color: "var(--text3)" }}>
                         Shared with: {deployResult.allowedEmails.join(", ")}
+                      </div>
+                    )}
+                    {deployResult.allowedGroupIds?.length > 0 && (
+                      <div style={{ marginTop: 8, fontSize: 12, color: "var(--text3)" }}>
+                        Group access: {deployResult.allowedGroupIds.map((groupId) => accessGroupNameById[groupId] || groupId).join(", ")}
                       </div>
                     )}
                     <div style={{ marginTop: 14, fontSize: 13, color: "var(--text3)" }}>
@@ -1424,6 +1789,9 @@ export default function HomePage() {
                           <div className="mcp-repo" style={{ color: "var(--text3)" }}>
                             📄 {server.entryFile}
                           </div>
+                          <div className="mcp-repo" style={{ color: "var(--text3)" }}>
+                            {server.sourceType === "external" ? "↗ external target" : "🐳 docker runtime"}
+                          </div>
                         </div>
                         <div style={{ marginLeft: "auto" }}>
                           <span className={cn("chip", server.status === "running" ? "chip-green" : "chip-red")}>
@@ -1459,12 +1827,24 @@ export default function HomePage() {
                         {server.url}
                       </div>
 
+                      <div style={{ marginTop: 12, display: "grid", gap: 6 }}>
+                        <div style={{ fontSize: 12, color: "var(--text3)" }}>
+                          Emails: {server.allowedEmails.length > 0 ? server.allowedEmails.join(", ") : "owner/admin only"}
+                        </div>
+                        <div style={{ fontSize: 12, color: "var(--text3)" }}>
+                          Groups: {server.allowedGroupIds.length > 0 ? server.allowedGroupIds.map((groupId) => accessGroupNameById[groupId] || groupId).join(", ") : "none"}
+                        </div>
+                      </div>
+
                       <div className="mcp-card-actions">
                         <button className="btn btn-secondary btn-sm" onClick={() => copyServerUrl(server.id)}>
                           Copy URL
                         </button>
                         <button className="btn btn-secondary btn-sm" onClick={() => viewLogs(server.id)}>
                           View Logs
+                        </button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => openAccessEditor(server)}>
+                          Access
                         </button>
                         <button
                           className="btn btn-danger btn-sm"
@@ -1474,6 +1854,61 @@ export default function HomePage() {
                           Stop
                         </button>
                       </div>
+
+                      {expandedAccessServerId === server.id && (
+                        <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border)", display: "grid", gap: 12 }}>
+                          <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label className="form-label">Allowed Emails</label>
+                            <input
+                              type="text"
+                              className="form-input"
+                              value={serverAccessDrafts[server.id]?.emailsInput || ""}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                setServerAccessDrafts((current) => ({
+                                  ...current,
+                                  [server.id]: { ...(current[server.id] || {}), emailsInput: value, groupIds: current[server.id]?.groupIds || server.allowedGroupIds || [], saving: current[server.id]?.saving || false },
+                                }));
+                              }}
+                            />
+                          </div>
+                          <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label className="form-label">Allowed Groups</label>
+                            <select
+                              multiple
+                              className="form-select"
+                              value={serverAccessDrafts[server.id]?.groupIds || []}
+                              onChange={(event) => {
+                                const groupIds = Array.from(event.target.selectedOptions).map((option) => option.value);
+                                setServerAccessDrafts((current) => ({
+                                  ...current,
+                                  [server.id]: { ...(current[server.id] || {}), emailsInput: current[server.id]?.emailsInput || (server.allowedEmails || []).join(", "), groupIds, saving: current[server.id]?.saving || false },
+                                }));
+                              }}
+                              style={{ minHeight: 120 }}
+                            >
+                              {accessGroups.length === 0 ? (
+                                <option value="">No access groups yet</option>
+                              ) : (
+                                accessGroups.map((group) => (
+                                  <option key={group.id} value={group.id}>
+                                    {group.name} ({group.member_count})
+                                  </option>
+                                ))
+                              )}
+                            </select>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                            <button
+                              className="btn btn-primary btn-sm"
+                              onClick={() => saveServerAccess(server.id)}
+                              disabled={serverAccessDrafts[server.id]?.saving}
+                            >
+                              {serverAccessDrafts[server.id]?.saving ? "Saving..." : "Save Access"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))
                 )}
@@ -1738,6 +2173,110 @@ export default function HomePage() {
                         Zero code changes — just swap env vars
                       </div>
                     </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card" style={{ marginTop: 20 }}>
+                <div className="card-header">
+                  <div>
+                    <div className="card-title">Access Groups</div>
+                    <div className="section-sub">Create reusable email groups, then attach them to MCP servers</div>
+                  </div>
+                  <button className="btn btn-secondary btn-sm" onClick={() => loadAccessGroups(false)}>
+                    ↻ Refresh
+                  </button>
+                </div>
+
+                <div className="grid-2">
+                  <div>
+                    <div className="form-group">
+                      <label className="form-label">Group Name</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={groupEditor.name}
+                        onChange={(event) => setGroupEditor((current) => ({ ...current, name: event.target.value }))}
+                        placeholder="e.g. Customer Success"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Description</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={groupEditor.description}
+                        onChange={(event) => setGroupEditor((current) => ({ ...current, description: event.target.value }))}
+                        placeholder="Who should use this MCP?"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Member Emails</label>
+                      <textarea
+                        className="form-input"
+                        value={groupEditor.members}
+                        onChange={(event) => setGroupEditor((current) => ({ ...current, members: event.target.value }))}
+                        placeholder="alice@company.com, bob@company.com"
+                        style={{ minHeight: 120, resize: "vertical" }}
+                      />
+                    </div>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button className="btn btn-primary" onClick={saveAccessGroup}>
+                        {groupEditor.id ? "Update Group" : "Create Group"}
+                      </button>
+                      {groupEditor.id && (
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => setGroupEditor({ id: "", name: "", description: "", members: "" })}
+                        >
+                          Cancel Edit
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gap: 12 }}>
+                    {accessGroups.length === 0 ? (
+                      <div className="empty">
+                        <div className="empty-icon">◎</div>
+                        <div className="empty-title">No access groups yet</div>
+                        <div className="empty-sub">Create a reusable group to grant MCP access faster.</div>
+                      </div>
+                    ) : (
+                      accessGroups.map((group) => (
+                        <div key={group.id} className="repo-item selected" style={{ alignItems: "flex-start" }}>
+                          <div style={{ display: "grid", gap: 6, flex: 1 }}>
+                            <div className="repo-name">{group.name}</div>
+                            <div className="repo-desc">{group.description || "No description"}</div>
+                            <div style={{ fontSize: 12, color: "var(--text3)" }}>
+                              {group.member_count} member{group.member_count === 1 ? "" : "s"}
+                            </div>
+                            <div style={{ fontSize: 12, color: "var(--text3)", lineHeight: 1.6 }}>
+                              {(group.members || []).join(", ") || "No members"}
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => setGroupEditor({
+                                id: group.id,
+                                name: group.name,
+                                description: group.description || "",
+                                members: (group.members || []).join(", "),
+                              })}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="btn btn-danger btn-sm"
+                              onClick={() => deleteAccessGroup(group.id)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
