@@ -18,8 +18,9 @@ class MCPHostEngine:
         self._docker_client = None
         self._server_logs: dict[str, list[str]] = {}
 
-    def build_gateway_url(self, server_id: str) -> str:
-        return f"{settings.GATEWAY_PUBLIC_URL}/mcp/{server_id}"
+    def build_gateway_url(self, server_id: str, *, request_host: str | None = None, scheme: str | None = None) -> str:
+        base = settings.resolve_gateway_url(request_host=request_host, scheme=scheme)
+        return f"{base}/mcp/{server_id}"
 
     def server_workspace(self, server_id: str) -> Path:
         server_dir = self.mcp_base_path / server_id

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,6 +47,26 @@ async def get_login_url(
         ),
         "oauth": oauth_metadata(google_hint=(provider == "google")),
     }
+
+
+@router.get("/login")
+async def login_redirect(
+    provider: str = Query(
+        default="keycloak",
+        pattern="^(keycloak|google|google_direct)$",
+    ),
+    redirect_uri: str | None = None,
+    state: str | None = None,
+):
+    effective_state = state or provider
+    return RedirectResponse(
+        build_login_url(
+            redirect_uri=redirect_uri,
+            state=effective_state,
+            provider=provider,
+        ),
+        status_code=307,
+    )
 
 
 @router.get("/oauth-metadata")

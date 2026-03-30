@@ -55,6 +55,12 @@ async def lifespan(app: FastAPI):
     """Startup: create DB tables"""
     await create_tables()
     print("✅ Database tables created")
+    if settings.is_gateway_url_localhost:
+        print("⚠️  GATEWAY_PUBLIC_URL is set to a localhost address.")
+        print("   MCP URLs will be auto-resolved from request Host headers.")
+        print("   For production, set GATEWAY_PUBLIC_URL to your public domain.")
+    else:
+        print(f"✅ GATEWAY_PUBLIC_URL: {settings.GATEWAY_PUBLIC_URL}")
     print("✅ MCP Platform started")
     yield
     print("MCP Platform shutting down...")
@@ -166,21 +172,39 @@ def _is_browser_request(request: Request) -> bool:
     return request.method == "GET" and "text/html" in accept and "mozilla" in user_agent
 
 
-def _mcp_resource_metadata_url(server_id: str) -> str:
-    return f"{settings.GATEWAY_PUBLIC_URL.rstrip('/')}/.well-known/oauth-protected-resource/mcp/{server_id}"
+def _mcp_resource_metadata_url(server_id: str, request: Request | None = None) -> str:
+    host = request.headers.get("host") if request else None
+    scheme = request.url.scheme if request else None
+    base = settings.resolve_gateway_url(request_host=host, scheme=scheme)
+    return f"{base}/.well-known/oauth-protected-resource/mcp/{server_id}"
+
+
+def _mcp_access_mode(server: MCPServer) -> str:
+    config = server.config or {}
+    mode = str(config.get("mcp_access_mode") or "").strip().lower()
+    if mode in {"public", "unauthenticated", "noauth", "none"}:
+        return "public"
+    if mode in {"platform_auth", "oauth", "protected"}:
+        return "platform_auth"
+    if config.get("source_type") == "github":
+        return "public"
+    return "platform_auth"
 
 
 def _unauthorized_mcp_response(request: Request, server_id: str) -> Response:
     if _is_browser_request(request):
         return _login_redirect_response(request)
 
-    resource_url = f"{settings.GATEWAY_PUBLIC_URL.rstrip('/')}/mcp/{server_id}"
+    host = request.headers.get("host")
+    scheme = request.url.scheme
+    base = settings.resolve_gateway_url(request_host=host, scheme=scheme)
+    resource_url = f"{base}/mcp/{server_id}"
     headers = {
         "WWW-Authenticate": (
             'Bearer realm="mcp", '
             f'resource="{resource_url}", '
-            f'authorization_uri="{settings.GATEWAY_PUBLIC_URL.rstrip("/")}/authorize", '
-            f'resource_metadata="{_mcp_resource_metadata_url(server_id)}"'
+            f'authorization_uri="{base}/authorize", '
+            f'resource_metadata="{_mcp_resource_metadata_url(server_id, request)}"'
         )
     }
     return JSONResponse(
@@ -287,88 +311,93 @@ async def _handle_mcp_request(
     request: Request,
     db: AsyncSession,
 ):
-    token = get_request_access_token(request)
-    if not token:
-        return _unauthorized_mcp_response(request, server.id)
-
-    try:
-        user = await resolve_user_from_token(token=token, db=db)
-    except HTTPException:
-        return _unauthorized_mcp_response(request, server.id)
-
-    allowed_emails = _allowed_server_emails(server)
-    allowed_group_ids = normalize_group_ids((server.config or {}).get("allowed_group_ids", []))
-    requester_email = (user.get("email") or "").strip().lower()
-    is_owner = server.tenant_id == (user.get("tenant_id") or user["user_id"])
-    is_admin = "admin" in user.get("roles", [])
-    is_allowed = requester_email and requester_email in allowed_emails
-    if not is_allowed:
-        is_allowed = await email_allowed_via_groups(
-            db,
-            group_ids=allowed_group_ids,
-            email=requester_email,
-        )
-    if not (is_owner or is_admin or is_allowed):
-        await log_tool_call(
-            db=db,
-            session_id=None,
-            mcp_server_id=server.id,
-            tenant_id=server.tenant_id,
-            user_id=user["user_id"],
-            user_email=user.get("email") or "",
-            tool_name="access_check",
-            tool_input={"method": request.method, "path": request.url.path},
-            tool_output={"detail": "Access denied"},
-            status="denied",
-            duration_ms=0,
-        )
-        raise HTTPException(status_code=403, detail="You do not have access to this MCP server")
-
     server_tenant_id = server.tenant_id
+    access_mode = _mcp_access_mode(server)
+    user = None
+    session = None
+    session_id = None
 
-    session_id = request.headers.get("x-session-id")
-    session = await db.get(MCPSession, session_id) if session_id else None
-    if session and (
-        session.tenant_id != server_tenant_id
-        or session.user_id != user["user_id"]
-        or session.mcp_server_id != server.id
-    ):
-        session = None
+    if access_mode != "public":
+        token = get_request_access_token(request)
+        if not token:
+            return _unauthorized_mcp_response(request, server.id)
 
-    if not session:
-        session = MCPSession(
-            mcp_server_id=server.id,
-            tenant_id=server_tenant_id,
-            user_id=user["user_id"],
-            user_email=user.get("email"),
-            user_roles=user.get("roles", []),
-            status="active",
-            started_at=datetime.utcnow(),
-            last_activity=datetime.utcnow(),
-        )
-        db.add(session)
-        await db.flush()
         try:
-            await session_manager.create_session(
-                session_id=session.id,
+            user = await resolve_user_from_token(token=token, db=db)
+        except HTTPException:
+            return _unauthorized_mcp_response(request, server.id)
+
+        allowed_emails = _allowed_server_emails(server)
+        allowed_group_ids = normalize_group_ids((server.config or {}).get("allowed_group_ids", []))
+        requester_email = (user.get("email") or "").strip().lower()
+        is_owner = server.tenant_id == (user.get("tenant_id") or user["user_id"])
+        is_admin = "admin" in user.get("roles", [])
+        is_allowed = requester_email and requester_email in allowed_emails
+        if not is_allowed:
+            is_allowed = await email_allowed_via_groups(
+                db,
+                group_ids=allowed_group_ids,
+                email=requester_email,
+            )
+        if not (is_owner or is_admin or is_allowed):
+            await log_tool_call(
+                db=db,
+                session_id=None,
+                mcp_server_id=server.id,
+                tenant_id=server.tenant_id,
                 user_id=user["user_id"],
                 user_email=user.get("email") or "",
-                tenant_id=server_tenant_id,
-                mcp_server_id=server.id,
-                roles=user.get("roles", []),
+                tool_name="access_check",
+                tool_input={"method": request.method, "path": request.url.path},
+                tool_output={"detail": "Access denied"},
+                status="denied",
+                duration_ms=0,
             )
-        except Exception:
-            pass
-    else:
-        try:
-            await session_manager.update_activity(server_tenant_id, session.id)
-        except Exception:
-            pass
+            raise HTTPException(status_code=403, detail="You do not have access to this MCP server")
 
-    # Release the DB connection before waiting on the upstream MCP runtime.
-    # Without this, concurrent MCP calls can exhaust the async pool and break
-    # unrelated login/OAuth requests.
-    await db.commit()
+        session_id = request.headers.get("x-session-id")
+        session = await db.get(MCPSession, session_id) if session_id else None
+        if session and (
+            session.tenant_id != server_tenant_id
+            or session.user_id != user["user_id"]
+            or session.mcp_server_id != server.id
+        ):
+            session = None
+
+        if not session:
+            session = MCPSession(
+                mcp_server_id=server.id,
+                tenant_id=server_tenant_id,
+                user_id=user["user_id"],
+                user_email=user.get("email"),
+                user_roles=user.get("roles", []),
+                status="active",
+                started_at=datetime.utcnow(),
+                last_activity=datetime.utcnow(),
+            )
+            db.add(session)
+            await db.flush()
+            try:
+                await session_manager.create_session(
+                    session_id=session.id,
+                    user_id=user["user_id"],
+                    user_email=user.get("email") or "",
+                    tenant_id=server_tenant_id,
+                    mcp_server_id=server.id,
+                    roles=user.get("roles", []),
+                )
+            except Exception:
+                pass
+        else:
+            try:
+                await session_manager.update_activity(server_tenant_id, session.id)
+            except Exception:
+                pass
+
+        # Release the DB connection before waiting on the upstream MCP runtime.
+        # Without this, concurrent MCP calls can exhaust the async pool and break
+        # unrelated login/OAuth requests.
+        await db.commit()
 
     upstream_url = mcp_host.upstream_url(server.config or {})
     if not upstream_url:
@@ -390,11 +419,15 @@ async def _handle_mcp_request(
         if key.lower() not in {"authorization", "cookie", "host", "content-length"}
     }
     forward_headers.update(mcp_host.upstream_headers(server.config or {}))
-    forward_headers["x-mcp-session-id"] = session.id
-    forward_headers["x-mcp-user-id"] = user["user_id"]
-    if user.get("email"):
+    if session is not None:
+        forward_headers["x-mcp-session-id"] = session.id
+    if user is not None:
+        forward_headers["x-mcp-user-id"] = user["user_id"]
+    if user and user.get("email"):
         forward_headers["x-mcp-user-email"] = user["email"]
     forward_headers["x-mcp-tenant-id"] = server_tenant_id
+    if access_mode == "public":
+        forward_headers["x-mcp-access-mode"] = "public"
 
     if request.url.query:
         upstream_url = f"{upstream_url}?{request.url.query}"
@@ -422,19 +455,20 @@ async def _handle_mcp_request(
                     )
     except Exception as exc:
         duration_ms = int((datetime.utcnow() - started).total_seconds() * 1000)
-        await log_tool_call(
-            db=db,
-            session_id=session.id,
-            mcp_server_id=server.id,
-            tenant_id=server_tenant_id,
-            user_id=user["user_id"],
-            user_email=user.get("email") or "",
-            tool_name=tool_name,
-            tool_input=tool_input or {"method": request.method, "path": request.url.path},
-            tool_output={"detail": str(exc)},
-            status="upstream_error",
-            duration_ms=duration_ms,
-        )
+        if session is not None and user is not None:
+            await log_tool_call(
+                db=db,
+                session_id=session.id,
+                mcp_server_id=server.id,
+                tenant_id=server_tenant_id,
+                user_id=user["user_id"],
+                user_email=user.get("email") or "",
+                tool_name=tool_name,
+                tool_input=tool_input or {"method": request.method, "path": request.url.path},
+                tool_output={"detail": str(exc)},
+                status="upstream_error",
+                duration_ms=duration_ms,
+            )
         raise HTTPException(status_code=502, detail=f"Failed to reach MCP runtime: {exc}") from exc
 
     try:
@@ -448,22 +482,23 @@ async def _handle_mcp_request(
         }
 
     duration_ms = int((datetime.utcnow() - started).total_seconds() * 1000)
-    session.status = "active"
-    session.call_count = (session.call_count or 0) + 1
-    session.last_activity = datetime.utcnow()
-    await log_tool_call(
-        db=db,
-        session_id=session.id,
-        mcp_server_id=server.id,
-        tenant_id=server_tenant_id,
-        user_id=user["user_id"],
-        user_email=user.get("email") or "",
-        tool_name=tool_name,
-        tool_input=tool_input or {"method": request.method, "path": request.url.path},
-        tool_output=response_output,
-        status="success" if upstream.status_code < 400 else "error",
-        duration_ms=duration_ms,
-    )
+    if session is not None and user is not None:
+        session.status = "active"
+        session.call_count = (session.call_count or 0) + 1
+        session.last_activity = datetime.utcnow()
+        await log_tool_call(
+            db=db,
+            session_id=session.id,
+            mcp_server_id=server.id,
+            tenant_id=server_tenant_id,
+            user_id=user["user_id"],
+            user_email=user.get("email") or "",
+            tool_name=tool_name,
+            tool_input=tool_input or {"method": request.method, "path": request.url.path},
+            tool_output=response_output,
+            status="success" if upstream.status_code < 400 else "error",
+            duration_ms=duration_ms,
+        )
 
     return Response(
         content=upstream.content,
@@ -494,13 +529,38 @@ async def openid_configuration_for_path(resource_path: str):
 
 
 @app.get("/.well-known/oauth-protected-resource")
-async def oauth_protected_resource_root():
-    return protected_resource_metadata(settings.GATEWAY_PUBLIC_URL.rstrip("/"))
+async def oauth_protected_resource_root(request: Request):
+    base = settings.resolve_gateway_url(
+        request_host=request.headers.get("host"),
+        scheme=request.url.scheme,
+    )
+    return protected_resource_metadata(base)
 
 
 @app.get("/.well-known/oauth-protected-resource/{resource_path:path}")
-async def oauth_protected_resource_for_path(resource_path: str):
-    resource_url = f"{settings.GATEWAY_PUBLIC_URL.rstrip('/')}/{resource_path.lstrip('/')}"
+async def oauth_protected_resource_for_path(
+    resource_path: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    # If the path refers to a specific MCP server, check if it's public.
+    # Public MCP servers should NOT advertise OAuth so clients connect directly.
+    import re as _re
+    match = _re.match(r"^mcp/([^/]+)$", resource_path.strip("/"))
+    if match:
+        server_id = match.group(1)
+        server = await db.get(MCPServer, server_id)
+        if server and _mcp_access_mode(server) == "public":
+            raise HTTPException(
+                status_code=404,
+                detail="This MCP server does not require authentication",
+            )
+
+    base = settings.resolve_gateway_url(
+        request_host=request.headers.get("host"),
+        scheme=request.url.scheme,
+    )
+    resource_url = f"{base}/{resource_path.lstrip('/')}"
     return protected_resource_metadata(resource_url)
 
 
@@ -747,7 +807,11 @@ async def legacy_mcp_endpoint(
     if not server:
         raise HTTPException(status_code=404, detail="MCP server not found")
 
-    target = mcp_host.build_gateway_url(server.id)
+    target = mcp_host.build_gateway_url(
+        server.id,
+        request_host=request.headers.get("host"),
+        scheme=request.url.scheme,
+    )
     if request.url.query:
         target = f"{target}?{request.url.query}"
     return RedirectResponse(target, status_code=307)

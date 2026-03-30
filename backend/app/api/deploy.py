@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -203,12 +203,12 @@ def _base_server_config(
     return config
 
 
-def _canonical_endpoint_url(server: MCPServer) -> str:
-    return mcp_host.build_gateway_url(server.id)
+def _canonical_endpoint_url(server: MCPServer, *, request_host: str | None = None, scheme: str | None = None) -> str:
+    return mcp_host.build_gateway_url(server.id, request_host=request_host, scheme=scheme)
 
 
-def _ensure_server_gateway_config(server: MCPServer) -> None:
-    canonical_url = _canonical_endpoint_url(server)
+def _ensure_server_gateway_config(server: MCPServer, *, request_host: str | None = None, scheme: str | None = None) -> None:
+    canonical_url = _canonical_endpoint_url(server, request_host=request_host, scheme=scheme)
     if server.endpoint_url != canonical_url:
         server.endpoint_url = canonical_url
 
@@ -220,6 +220,7 @@ def _ensure_server_gateway_config(server: MCPServer) -> None:
 @router.post("/deploy")
 async def deploy_mcp_server(
     request: DeployRequest,
+    raw_request: Request,
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -247,7 +248,9 @@ async def deploy_mcp_server(
         runtime_env=request.runtime_env,
     )
 
-    endpoint_url = mcp_host.build_gateway_url(server_id)
+    req_host = raw_request.headers.get("host")
+    req_scheme = raw_request.url.scheme
+    endpoint_url = mcp_host.build_gateway_url(server_id, request_host=req_host, scheme=req_scheme)
     client_config = build_remote_mcp_client_config(request.name, endpoint_url)
     server = MCPServer(
         id=server_id,
@@ -288,6 +291,7 @@ async def deploy_mcp_server(
 @router.post("/import")
 async def import_external_mcp(
     request: ExternalImportRequest,
+    raw_request: Request,
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -308,7 +312,9 @@ async def import_external_mcp(
         headers=headers,
         timeout_seconds=timeout_seconds,
     )
-    endpoint_url = mcp_host.build_gateway_url(server_id)
+    req_host = raw_request.headers.get("host")
+    req_scheme = raw_request.url.scheme
+    endpoint_url = mcp_host.build_gateway_url(server_id, request_host=req_host, scheme=req_scheme)
     client_config = build_remote_mcp_client_config(request.name, endpoint_url)
 
     db.add(
@@ -348,9 +354,12 @@ async def import_external_mcp(
 
 @router.get("/", response_model=list[MCPServerResponse])
 async def list_mcp_servers(
+    request: Request,
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    req_host = request.headers.get("host")
+    req_scheme = request.url.scheme
     result = await db.execute(select(MCPServer).order_by(MCPServer.created_at.desc()))
     all_servers = list(result.scalars().all())
     servers: list[MCPServer] = []
@@ -360,7 +369,7 @@ async def list_mcp_servers(
 
     payload: list[MCPServerResponse] = []
     for server in servers:
-        _ensure_server_gateway_config(server)
+        _ensure_server_gateway_config(server, request_host=req_host, scheme=req_scheme)
         server.status = await mcp_host.get_status(server.config or {})
         payload.append(
             MCPServerResponse(
@@ -380,11 +389,14 @@ async def list_mcp_servers(
 @router.get("/{server_id}")
 async def get_mcp_server(
     server_id: str,
+    request: Request,
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    req_host = request.headers.get("host")
+    req_scheme = request.url.scheme
     server = await _load_viewable_server_for_user(db, server_id=server_id, user=user)
-    _ensure_server_gateway_config(server)
+    _ensure_server_gateway_config(server, request_host=req_host, scheme=req_scheme)
     server.status = await mcp_host.get_status(server.config or {})
     return {
         "id": server.id,
@@ -401,11 +413,14 @@ async def get_mcp_server(
 @router.delete("/{server_id}")
 async def stop_mcp_server(
     server_id: str,
+    request: Request,
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    req_host = request.headers.get("host")
+    req_scheme = request.url.scheme
     server = await _load_server_for_user(db, server_id=server_id, user=user)
-    _ensure_server_gateway_config(server)
+    _ensure_server_gateway_config(server, request_host=req_host, scheme=req_scheme)
     await mcp_host.stop(server.config or {})
     server.status = "stopped"
     return {"message": "MCP server stopped", "server_id": server_id}
@@ -414,11 +429,14 @@ async def stop_mcp_server(
 @router.get("/{server_id}/logs")
 async def get_mcp_server_logs(
     server_id: str,
+    request: Request,
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    req_host = request.headers.get("host")
+    req_scheme = request.url.scheme
     server = await _load_viewable_server_for_user(db, server_id=server_id, user=user)
-    _ensure_server_gateway_config(server)
+    _ensure_server_gateway_config(server, request_host=req_host, scheme=req_scheme)
     status = await mcp_host.get_status(server.config or {})
     server.status = status
     logs = await mcp_host.get_logs(server_id, server.config or {})
@@ -433,11 +451,14 @@ async def get_mcp_server_logs(
 @router.get("/{server_id}/access")
 async def get_mcp_server_access(
     server_id: str,
+    request: Request,
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    req_host = request.headers.get("host")
+    req_scheme = request.url.scheme
     server = await _load_viewable_server_for_user(db, server_id=server_id, user=user)
-    _ensure_server_gateway_config(server)
+    _ensure_server_gateway_config(server, request_host=req_host, scheme=req_scheme)
     return await build_server_access_payload(db, server)
 
 
@@ -445,11 +466,14 @@ async def get_mcp_server_access(
 async def update_mcp_server_access(
     server_id: str,
     request: AccessUpdateRequest,
+    raw_request: Request,
     user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    req_host = raw_request.headers.get("host")
+    req_scheme = raw_request.url.scheme
     server = await _load_server_for_user(db, server_id=server_id, user=user)
-    _ensure_server_gateway_config(server)
+    _ensure_server_gateway_config(server, request_host=req_host, scheme=req_scheme)
     allowed_group_ids = await _validate_access_groups(
         db,
         tenant_id=server.tenant_id,
@@ -461,7 +485,7 @@ async def update_mcp_server_access(
     config["allowed_group_ids"] = allowed_group_ids
     if user.get("email") and not config.get("owner_email"):
         config["owner_email"] = user["email"].strip().lower()
-    config["client_config"] = build_remote_mcp_client_config(server.name, server.endpoint_url or _canonical_endpoint_url(server))
+    config["client_config"] = build_remote_mcp_client_config(server.name, server.endpoint_url or _canonical_endpoint_url(server, request_host=req_host, scheme=req_scheme))
     server.config = config
 
     return {

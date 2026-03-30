@@ -1,4 +1,15 @@
 .env
+backend/.env
+backend/.venv/
+
+__pycache__/
+*.py[cod]
+*.log
+
+.DS_Store
+.idea/
+.vscode/
+
 frontend/.next
 frontend/.next-dev
 frontend/.next.bak.*

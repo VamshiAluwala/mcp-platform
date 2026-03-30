@@ -59,14 +59,10 @@ function LoginContent() {
           ? `${window.location.origin}/auth/google/callback`
           : `${window.location.origin}/auth/callback`;
       const state = encodeOAuthState(provider, nextTarget);
-      const resp = await fetch(
-        `${API}/api/auth/login-url?provider=${provider}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`,
-      );
-      const payload = await resp.json();
-      if (!resp.ok) {
-        throw new Error(payload.detail || `Login failed (${resp.status})`);
-      }
-      window.location.href = payload.login_url;
+      window.location.href =
+        `${API}/api/auth/login?provider=${provider}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&state=${encodeURIComponent(state)}`;
     } catch (err) {
       setError(err.message);
       setLoadingProvider(false);

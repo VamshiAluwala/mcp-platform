@@ -1,37 +1,48 @@
 # ─────────────────────────────────────────────────────────────────
 # MCP Platform — Local Development Makefile
-# Run WITHOUT Docker. Just needs Postgres + Redis (see `make setup`)
+# Run frontend/backend locally, but keep infra services in Docker.
 # ─────────────────────────────────────────────────────────────────
 
-.PHONY: setup backend frontend dev stop logs help keycloak-fix-http keycloak-mcp-client
+.PHONY: setup local backend frontend dev stop logs help keycloak-fix-http keycloak-mcp-client
 
 # ── Colours ──────────────────────────────────────────────────────
 GREEN  := \033[0;32m
 YELLOW := \033[0;33m
+RED    := \033[0;31m
 RESET  := \033[0m
 
+# Prefer a supported Python for local backend deps.
+PYTHON_BIN := $(shell if command -v python3.12 >/dev/null 2>&1; then echo python3.12; \
+               elif command -v python3.13 >/dev/null 2>&1; then echo python3.13; \
+               else echo python3; fi)
+
 # ════════════════════════════════════════════════════════════════
-# SETUP — one-time: install system services + Python venv
+# SETUP — one-time: Python venv + npm install
 # ════════════════════════════════════════════════════════════════
 setup:
-	@echo "$(GREEN)▶ Installing system services via Homebrew…$(RESET)"
-	brew install postgresql@16 redis git || true
-	brew services start postgresql@16 || true
-	brew services start redis || true
-	@echo "$(YELLOW)▶ Creating PostgreSQL database 'appdb'…$(RESET)"
-	createdb appdb 2>/dev/null || echo "  (database already exists, skipping)"
+	@echo "$(GREEN)▶ Using Python interpreter: $$($(PYTHON_BIN) --version)$(RESET)"
+	@if [ "$$($(PYTHON_BIN) -c 'import sys; print(sys.version_info[:2] >= (3, 14))')" = "True" ]; then \
+	  echo "$(RED)✗ Python 3.14+ is not supported by this backend yet. Install python3.12 or python3.13 and rerun make setup.$(RESET)"; \
+	  exit 1; \
+	fi
 	@echo "$(GREEN)▶ Setting up Python virtual environment…$(RESET)"
-	cd backend && python3 -m venv .venv && \
+	rm -rf backend/.venv
+	cd backend && $(PYTHON_BIN) -m venv .venv && \
 	  .venv/bin/pip install --upgrade pip && \
 	  .venv/bin/pip install -r requirements.txt
 	@echo "$(GREEN)▶ Installing frontend dependencies…$(RESET)"
 	cd frontend && npm install
 	@echo ""
-	@echo "$(GREEN)✅  Setup complete! Run 'make dev' to start everything.$(RESET)"
+	@echo "$(GREEN)✅  Setup complete! Run 'make local' to start everything.$(RESET)"
 
 # ════════════════════════════════════════════════════════════════
 # DEV — start backend + frontend in parallel (foreground)
 # ════════════════════════════════════════════════════════════════
+local:
+	@echo "$(GREEN)▶ Starting Docker infra (Postgres + Redis + Keycloak + MinIO), then backend + frontend locally…$(RESET)"
+	@$(MAKE) services-start
+	@$(MAKE) dev
+
 dev:
 	@echo "$(GREEN)▶ Starting backend (port 8000) and frontend (port 3000)…$(RESET)"
 	@trap 'kill 0' INT; \
@@ -51,20 +62,20 @@ frontend:
 	cd frontend && npm run dev
 
 # ════════════════════════════════════════════════════════════════
-# SERVICES — start/stop only Postgres + Redis
+# SERVICES — Docker infra only
 # ════════════════════════════════════════════════════════════════
 services-start:
-	@brew services start postgresql@16
-	@brew services start redis
-	@echo "$(GREEN)✅  Postgres + Redis running$(RESET)"
+	@echo "$(GREEN)▶ Starting Docker infra services…$(RESET)"
+	@docker compose stop backend frontend >/dev/null 2>&1 || true
+	@docker compose up -d postgres redis keycloak minio
+	@echo "$(GREEN)✅  Docker infra running: postgres(5433), redis(6379), keycloak(8080), minio(9001/9002)$(RESET)"
 
 services-stop:
-	@brew services stop postgresql@16
-	@brew services stop redis
-	@echo "$(YELLOW)✅  Postgres + Redis stopped$(RESET)"
+	@docker compose stop postgres redis keycloak minio backend frontend >/dev/null 2>&1 || true
+	@echo "$(YELLOW)✅  Docker infra stopped$(RESET)"
 
 services-status:
-	@brew services list | grep -E "postgresql|redis"
+	@docker compose ps postgres redis keycloak minio backend frontend
 
 keycloak-fix-http:
 	@echo "$(GREEN)▶ Allowing HTTP login for local Keycloak realms…$(RESET)"
@@ -82,13 +93,15 @@ keycloak-mcp-client:
 # ════════════════════════════════════════════════════════════════
 help:
 	@echo ""
-	@echo "  $(GREEN)make setup$(RESET)           One-time: brew install + venv + npm install"
+	@echo "  $(GREEN)make setup$(RESET)           One-time: backend venv + frontend npm install"
+	@echo "  $(GREEN)make local$(RESET)           Start Docker infra + backend + frontend locally"
 	@echo "  $(GREEN)make dev$(RESET)             Start backend + frontend together"
+	@echo "  $(GREEN)$(PYTHON_BIN)$(RESET)               Preferred local backend interpreter"
 	@echo "  $(GREEN)make backend$(RESET)         Start backend only"
 	@echo "  $(GREEN)make frontend$(RESET)        Start frontend only"
-	@echo "  $(GREEN)make services-start$(RESET)  Start Postgres + Redis"
-	@echo "  $(GREEN)make services-stop$(RESET)   Stop Postgres + Redis"
-	@echo "  $(GREEN)make services-status$(RESET) Check service status"
+	@echo "  $(GREEN)make services-start$(RESET)  Start Docker infra services"
+	@echo "  $(GREEN)make services-stop$(RESET)   Stop Docker infra services"
+	@echo "  $(GREEN)make services-status$(RESET) Check Docker infra status"
 	@echo "  $(GREEN)make keycloak-fix-http$(RESET) Re-enable HTTP login for local Keycloak"
 	@echo "  $(GREEN)make keycloak-mcp-client$(RESET) Create/update loopback OAuth client for Claude/MCP apps"
 	@echo ""

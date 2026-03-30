@@ -456,6 +456,7 @@ async def deploy_from_github(
                     "allowed_user_emails": normalize_email_list(request.allowed_emails),
                     "allowed_group_ids": allowed_group_ids,
                     "runtime_env_keys": sorted(request.runtime_env.keys()),
+                    "mcp_access_mode": "public",
                     "runtime": runtime,
                     "client_config": client_config,
                 },

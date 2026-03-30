@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     # Google OAuth2 (Direct — not via Keycloak)
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
-    GOOGLE_REDIRECT_URI: str = "http://localhost:3000/auth/callback"
+    GOOGLE_REDIRECT_URI: str = "http://localhost:3000/auth/google/callback"
 
     # GitHub OAuth2
     GITHUB_OAUTH_CLIENT_ID: str = ""
@@ -58,6 +58,28 @@ class Settings(BaseSettings):
     MINIO_ACCESS_KEY: str = "minioadmin"
     MINIO_SECRET_KEY: str = "minioadmin123"
     MINIO_BUCKET: str = "mcp-files"
+
+    @property
+    def is_gateway_url_localhost(self) -> bool:
+        """Check if GATEWAY_PUBLIC_URL is still set to a localhost default."""
+        url = self.GATEWAY_PUBLIC_URL.lower()
+        return "localhost" in url or "127.0.0.1" in url or "0.0.0.0" in url
+
+    def resolve_gateway_url(self, request_host: str | None = None, scheme: str | None = None) -> str:
+        """Return the effective public gateway URL.
+
+        If GATEWAY_PUBLIC_URL has been explicitly set to a non-localhost value,
+        return it as-is. Otherwise, if a request Host header is available,
+        construct the URL from that header so deployed MCPs get a reachable URL.
+        """
+        if not self.is_gateway_url_localhost:
+            return self.GATEWAY_PUBLIC_URL.rstrip("/")
+
+        if request_host:
+            effective_scheme = scheme or "https"
+            return f"{effective_scheme}://{request_host}"
+
+        return self.GATEWAY_PUBLIC_URL.rstrip("/")
 
     class Config:
         env_file = ".env"

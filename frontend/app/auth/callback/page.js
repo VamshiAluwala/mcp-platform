@@ -22,7 +22,8 @@ function AuthCallbackContent() {
 
     const oauthError = search.get("error");
     const code = search.get("code");
-    const state = decodeOAuthState(search.get("state"));
+    const rawState = search.get("state");
+    const state = decodeOAuthState(rawState);
 
     if (oauthError) {
       setIsError(true);
@@ -46,6 +47,30 @@ function AuthCallbackContent() {
 
     (async () => {
       try {
+        if (state.flow === "mcp_client") {
+          const redirectUri = `${window.location.origin}/auth/callback`;
+          const bridgeResp = await fetch(`${API}/oauth/google/complete`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              code,
+              state: rawState,
+              redirect_uri: redirectUri,
+            }),
+          });
+          const bridgePayload = await bridgeResp.json();
+          if (!bridgeResp.ok) {
+            throw new Error(bridgePayload.detail || `Sign-in failed (${bridgeResp.status})`);
+          }
+          if (!bridgePayload.redirect_to) {
+            throw new Error("Missing MCP client redirect target");
+          }
+
+          setMessage("Sign-in successful! Returning to MCP client…");
+          window.location.href = bridgePayload.redirect_to;
+          return;
+        }
+
         const redirectUri = `${window.location.origin}/auth/callback`;
         const resp = await fetch(`${API}/api/auth/callback`, {
           method: "POST",

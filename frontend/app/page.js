@@ -1068,7 +1068,7 @@ export default function HomePage() {
                   <div className="signal-tile">
                     <span className="signal-kicker">Access</span>
                     <strong>{allowedEmailsInput ? "Shared rollout" : "Owner-only draft"}</strong>
-                    <span className="signal-meta">Allowlisted users sign in with Google before MCP access</span>
+                    <span className="signal-meta">App login stays protected. GitHub-deployed MCP URLs are currently public for local testing.</span>
                   </div>
                   <div className="signal-tile">
                     <span className="signal-kicker">Visibility</span>
@@ -1533,7 +1533,7 @@ export default function HomePage() {
                     onChange={(event) => setAllowedEmailsInput(event.target.value)}
                   />
                   <div style={{ marginTop: 8, fontSize: 12, color: "var(--text3)" }}>
-                    Only these users, the deploy owner, and admins can access this MCP.
+                    Stored for future gated access. GitHub-deployed MCP URLs are currently public.
                   </div>
                 </div>
                 <div className="form-group">
@@ -1629,7 +1629,7 @@ export default function HomePage() {
                     style={{ minHeight: 210, resize: "vertical", fontFamily: "var(--mono)", fontSize: 12 }}
                   />
                   <div style={{ marginTop: 8, fontSize: 12, color: "var(--text3)" }}>
-                    Accepts `upstream_url` or a full `mcpServers.*.serverUrl` JSON block. The gateway will wrap this target with Keycloak auth, group/email access, and audit logs.
+                    Accepts `upstream_url` or a full `mcpServers.*.serverUrl` JSON block. The gateway will wrap this target and keep the app dashboard protected.
                   </div>
                 </div>
                 <button
@@ -1671,7 +1671,7 @@ export default function HomePage() {
                       </div>
                     )}
                     <div style={{ marginTop: 14, fontSize: 13, color: "var(--text3)" }}>
-                      Use this MCP URL in your client. Google/SSO is enforced, access is checked per allowed email, and usage is tracked per user and per MCP.
+                      Use this MCP URL in your client. For GitHub-deployed MCPs, gateway OAuth is currently disabled so the URL is directly reachable.
                     </div>
                     {deployResult.clientConfig && (
                       <div style={{ marginTop: 18 }}>
