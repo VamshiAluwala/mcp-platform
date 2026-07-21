@@ -21,6 +21,14 @@ Works out of the box on any static host:
 - **Netlify / Vercel** — drag-and-drop the `portfolio/` folder
 - Any web server — copy `index.html` to the document root
 
+## Add your photo
+
+Drop a square-ish photo named `profile.jpg` into this folder (next to `index.html`) and it will appear automatically in the hero section. Until then, a styled "VK" initials placeholder is shown.
+
+## Theme
+
+The site supports both dark and light themes. It follows the visitor's system preference by default, and the sun/moon button in the navbar toggles it manually (the choice is remembered in `localStorage`).
+
 ## Notes
 
 - Fonts: Sora (headings), Inter (body), JetBrains Mono (accents) via Google Fonts, with system fallbacks

@@ -8,6 +8,16 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<script>
+  (function () {
+    let theme;
+    try { theme = localStorage.getItem("vk-theme"); } catch (e) {}
+    if (theme !== "light" && theme !== "dark") {
+      theme = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    }
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
 <style>
   :root {
     --bg: #0b0f14;
@@ -21,9 +31,30 @@
     --accent: #4fd1c5;
     --accent-soft: rgba(79, 209, 197, 0.12);
     --accent-2: #7aa2ff;
+    --nav-bg: rgba(11, 15, 20, 0.85);
+    --btn-primary-text: #06251f;
+    --hero-glow-1: rgba(122, 162, 255, 0.09);
+    --hero-glow-2: rgba(79, 209, 197, 0.07);
     --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --display: "Sora", "Inter", -apple-system, sans-serif;
     --mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  }
+  :root[data-theme="light"] {
+    --bg: #f7f9fb;
+    --bg-soft: #eef2f6;
+    --card: #ffffff;
+    --card-hover: #f4f8fb;
+    --border: #dbe3ec;
+    --text: #16222e;
+    --muted: #4d6275;
+    --faint: #7d90a3;
+    --accent: #0e9488;
+    --accent-soft: rgba(14, 148, 136, 0.1);
+    --accent-2: #3b6fd4;
+    --nav-bg: rgba(247, 249, 251, 0.85);
+    --btn-primary-text: #ffffff;
+    --hero-glow-1: rgba(59, 111, 212, 0.08);
+    --hero-glow-2: rgba(14, 148, 136, 0.08);
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -39,14 +70,18 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  ::selection { background: var(--accent); color: #06251f; }
+  ::selection { background: var(--accent); color: var(--btn-primary-text); }
+
+  body, nav, .stat, .skill-card, .project, .edu-card, .tag {
+    transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+  }
 
   .wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
 
   /* ---------- Nav ---------- */
   nav {
     position: sticky; top: 0; z-index: 50;
-    background: rgba(11, 15, 20, 0.85);
+    background: var(--nav-bg);
     backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border);
   }
@@ -66,14 +101,71 @@
   }
   .nav-links a:hover { color: var(--accent); }
   @media (max-width: 720px) { .nav-links { display: none; } }
+  .nav-right { display: flex; align-items: center; gap: 24px; }
+  .theme-toggle {
+    width: 38px; height: 38px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--card);
+    color: var(--text); cursor: pointer; font-size: 1.05rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: border-color 0.2s, color 0.2s, background-color 0.25s;
+  }
+  .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
 
   /* ---------- Hero ---------- */
   header.hero {
     padding: 96px 0 80px;
     background:
-      radial-gradient(ellipse 60% 50% at 75% 10%, rgba(122, 162, 255, 0.09), transparent),
-      radial-gradient(ellipse 50% 45% at 20% 90%, rgba(79, 209, 197, 0.07), transparent);
+      radial-gradient(ellipse 60% 50% at 75% 10%, var(--hero-glow-1), transparent),
+      radial-gradient(ellipse 50% 45% at 20% 90%, var(--hero-glow-2), transparent);
   }
+  .hero-inner {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 56px;
+  }
+  .hero-text { flex: 1; min-width: 0; }
+  @media (max-width: 860px) {
+    .hero-inner { flex-direction: column-reverse; align-items: flex-start; gap: 36px; }
+  }
+
+  /* ---------- Photo ---------- */
+  .photo-frame {
+    position: relative; flex-shrink: 0;
+    width: clamp(200px, 24vw, 264px); height: clamp(200px, 24vw, 264px);
+    border-radius: 28px; padding: 5px;
+    background: linear-gradient(140deg, var(--accent), var(--accent-2));
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+  }
+  :root[data-theme="light"] .photo-frame { box-shadow: 0 18px 50px rgba(22, 34, 46, 0.16); }
+  .photo-frame .photo-inner {
+    width: 100%; height: 100%; border-radius: 24px; overflow: hidden;
+    background: var(--card); position: relative;
+  }
+  .photo-frame img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .photo-placeholder {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    background: linear-gradient(160deg, var(--card), var(--bg-soft));
+  }
+  .photo-placeholder .initials {
+    font-family: var(--display); font-weight: 800;
+    font-size: clamp(3rem, 8vw, 4.4rem); letter-spacing: -0.02em;
+    background: linear-gradient(140deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .photo-placeholder .hint {
+    font-family: var(--mono); font-size: 0.62rem; color: var(--faint);
+    letter-spacing: 0.06em;
+  }
+  .photo-frame .status-chip {
+    position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%);
+    background: var(--card); border: 1px solid var(--border); border-radius: 999px;
+    padding: 6px 14px; font-size: 0.72rem; font-weight: 600; color: var(--text);
+    display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+  }
+  :root[data-theme="light"] .photo-frame .status-chip { box-shadow: 0 6px 18px rgba(22, 34, 46, 0.1); }
   .kicker {
     font-family: var(--mono); font-size: 0.82rem; color: var(--accent);
     letter-spacing: 0.08em; margin-bottom: 18px;
@@ -96,7 +188,7 @@
     font-weight: 600; font-size: 0.92rem; text-decoration: none;
     transition: transform 0.15s, box-shadow 0.15s, background 0.2s;
   }
-  .btn-primary { background: var(--accent); color: #06251f; }
+  .btn-primary { background: var(--accent); color: var(--btn-primary-text); }
   .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(79,209,197,0.25); }
   .btn-ghost { border: 1px solid var(--border); color: var(--text); }
   .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
@@ -255,33 +347,48 @@
 <nav>
   <div class="wrap nav-inner">
     <a class="logo" href="#top">VK<span>.</span>Aluwala</a>
-    <div class="nav-links">
-      <a href="#skills">Skills</a>
-      <a href="#experience">Experience</a>
-      <a href="#projects">Projects</a>
-      <a href="#education">Education</a>
-      <a href="#contact">Contact</a>
+    <div class="nav-right">
+      <div class="nav-links">
+        <a href="#skills">Skills</a>
+        <a href="#experience">Experience</a>
+        <a href="#projects">Projects</a>
+        <a href="#education">Education</a>
+        <a href="#contact">Contact</a>
+      </div>
+      <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle light / dark theme" title="Toggle theme">☀</button>
     </div>
   </div>
 </nav>
 
 <header class="hero" id="top">
-  <div class="wrap">
-    <div class="kicker">// AI ENGINEER · AGENTIC SYSTEMS · MCP · RAG</div>
-    <h1>Vamshi Krishna<br /><span class="accent">Aluwala</span></h1>
-    <p class="tagline">
-      AI Engineer with <strong>3+ years</strong> of experience building <strong>agentic AI systems</strong>,
-      enterprise automation platforms, and production-grade LLM applications — taking solutions
-      from PoC to secure, monitored, production deployment.
-    </p>
-    <div class="hero-cta">
-      <a class="btn btn-primary" href="mailto:vamshi.aluwala2001@gmail.com">Get in touch</a>
-      <a class="btn btn-ghost" href="https://linkedin.com/in/VamshiKrishnaAluwala" target="_blank" rel="noopener">LinkedIn ↗</a>
+  <div class="wrap hero-inner">
+    <div class="hero-text">
+      <div class="kicker">// AI ENGINEER · AGENTIC SYSTEMS · MCP · RAG</div>
+      <h1>Vamshi Krishna<br /><span class="accent">Aluwala</span></h1>
+      <p class="tagline">
+        AI Engineer with <strong>3+ years</strong> of experience building <strong>agentic AI systems</strong>,
+        enterprise automation platforms, and production-grade LLM applications — taking solutions
+        from PoC to secure, monitored, production deployment.
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="mailto:vamshi.aluwala2001@gmail.com">Get in touch</a>
+        <a class="btn btn-ghost" href="https://linkedin.com/in/VamshiKrishnaAluwala" target="_blank" rel="noopener">LinkedIn ↗</a>
+      </div>
+      <div class="hero-meta">
+        <span><span class="dot"></span>Hyderabad / Bangalore, India</span>
+        <span>+91 90145 01596</span>
+        <span>vamshi.aluwala2001@gmail.com</span>
+      </div>
     </div>
-    <div class="hero-meta">
-      <span><span class="dot"></span>Hyderabad / Bangalore, India</span>
-      <span>+91 90145 01596</span>
-      <span>vamshi.aluwala2001@gmail.com</span>
+    <div class="photo-frame">
+      <div class="photo-inner">
+        <img src="profile.jpg" alt="Vamshi Krishna Aluwala" onerror="this.style.display='none'; document.getElementById('photoFallback').style.display='flex';" />
+        <div class="photo-placeholder" id="photoFallback" style="display: none;">
+          <span class="initials">VK</span>
+          <span class="hint">add profile.jpg</span>
+        </div>
+      </div>
+      <span class="status-chip"><span class="dot"></span>Open to opportunities</span>
     </div>
   </div>
 </header>
@@ -505,6 +612,20 @@
 </footer>
 
 <script>
+  const toggleBtn = document.getElementById("themeToggle");
+  function syncToggleIcon() {
+    const light = document.documentElement.getAttribute("data-theme") === "light";
+    toggleBtn.textContent = light ? "☾" : "☀";
+    toggleBtn.setAttribute("aria-label", light ? "Switch to dark theme" : "Switch to light theme");
+  }
+  toggleBtn.addEventListener("click", () => {
+    const next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("vk-theme", next); } catch (e) {}
+    syncToggleIcon();
+  });
+  syncToggleIcon();
+
   const observer = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
       if (entry.isIntersecting) {
